@@ -7,3 +7,4 @@ dist/
 next-env.d.ts
 *.log
 .DS_Store
+filled-tds-*.pdf

@@ -16,7 +16,10 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:check": "tsx scripts/db-check.ts",
     "check": "npm run typecheck && npm run validate && npm run smoke && npm run form:check",
-    "form:check": "tsx scripts/form-check.ts"
+    "form:check": "tsx scripts/form-check.ts",
+    "docuseal:template": "tsx scripts/build-template.ts",
+    "docuseal:create": "tsx scripts/build-template.ts --create",
+    "docuseal:fill": "tsx scripts/fill-pdf.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

@@ -74,11 +74,16 @@ Next.js App Router, phone-first. Nine groups of tap-to-add chips with a confirm
 per group; `src/tds/form-view.ts` holds the pure projection (chip vs explicit
 yes/no, landing group) so it can be asserted without a browser.
 
-**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` —
-DocuSeal template and the first filled PDF.
+**Done:** DocuSeal, end to end. Template #5513507 is generated from the PDF's
+own checkbox glyphs by `scripts/build-template.ts`; `scripts/fill-pdf.ts` turns
+a seeded deal into a real filled, signable PDF.
 
-**Known stub:** `SECTION_C_GEOMETRY` in `docuseal.ts` has placeholder
-coordinates. Real row baselines need extracting from the PDF.
+**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` — the
+voice path for Section C.
+
+**Known gaps:** 8 of 135 registry fields have no slot on the supplied PDF — it
+is a paraphrased TDS, not the official C.A.R. form. Enumerated in
+`docs/BUILD_PLAN.md` under task 3.
 
 ## Stack
 

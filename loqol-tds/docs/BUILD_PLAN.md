@@ -70,7 +70,7 @@ that split, and that every group stays reachable.
 
 ---
 
-## 3. DocuSeal template + first filled PDF — DE-RISK HERE
+## ✅ 3. DocuSeal template + first filled PDF — DONE
 
 **Goal:** get an ugly, real, filled PDF out before the UI is pretty. This is the
 integration most likely to eat a day you didn't budget.
@@ -84,12 +84,44 @@ Two routes, use both:
   builder. Irregular layout, not worth automating.
 
 **Acceptance**
-- [ ] Template exists in DocuSeal Test Mode
-- [ ] `expectedFieldNames()` diffed against the real template, zero mismatches
-- [ ] `buildSubmission()` produces a submission with seller values prefilled and
+- [x] Template exists in DocuSeal Test Mode — #5513507, 127 live fields
+- [x] `expectedFieldNames()` diffed against the real template — **zero fields in
+      the template unknown to the registry**, and the 8 registry fields with no
+      slot are enumerated and explained below
+- [x] `buildSubmission()` produces a submission with seller values prefilled and
       locked readonly
-- [ ] A downloaded PDF shows correct checkboxes for a seeded answer set
-- [ ] Section C's shared explain box renders numbered per-question explanations
+- [x] A downloaded PDF shows correct checkboxes for a seeded answer set
+- [x] Section C's shared explain box renders numbered per-question explanations
+      — verified reading `13. Foothill Terrace Homeowners Association. Dues are
+      about $240 a month.`
+
+**The whole template is generated, not hand-placed.** Every checkbox on the TDS
+is a `□` glyph with a real position in the PDF content stream.
+`scripts/extract_boxes.py` pulls all 117 out with their trailing label;
+`scripts/build-template.ts` matches them to the registry and posts
+`create_template_from_pdf`. 127 of 135 fields place automatically. Field *names*
+always come from the registry's `docuseal` mapping — only geometry is resolved
+in the script.
+
+Matching is positional wherever labels are unreliable: the 16 Section C rows and
+all 8 option groups are matched in reading order against registry order, because
+the registry's option labels are seller-facing ("Yes, I live here") while the
+form says "is". Plain checkboxes match by label, exact before prefix, longest
+first — a loose prefix match let "Pool" claim the box belonging to "Pool/Spa
+Heater".
+
+**The supplied PDF is not the official C.A.R. form.** It is a paraphrased
+regeneration: header fields are literal `[City]` / `[County]` / `[Date]` tokens
+inline in a sentence rather than blank lines, and four checkboxes present on the
+real form are simply absent from it. `scripts/prepare_pdf.py` strips those
+tokens to produce the template base, since a field placed over one renders on
+top of it and both become unreadable.
+
+**The 8 fields with no slot**, all confirmed by rendering the page:
+`a_fireplace`, `a_exhaust_fans`, `a_220_wiring` — no checkbox exists on this
+form, only an "in ______" blank, which their location text fields do fill.
+`property_address`, `property_address_p2/p3`, `date_p2/p3` — this version has no
+street-address line and no per-page footers.
 
 **Gotcha:** Test Mode has its own separate API key. Don't pay for anything.
 

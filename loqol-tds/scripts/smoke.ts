@@ -1,13 +1,12 @@
 import { QUESTIONS, CHAPTERS, questionsInChapter, groupsInChapter } from "../src/tds/registry";
 import { validateRegistry, nextQuestion, progress, makeAnswer, resume } from "../src/tds/flow";
 import { detectConflicts } from "../src/tds/conflicts";
-import { toFieldValues, expectedFieldNames, sectionCTemplateFields } from "../src/tds/docuseal";
+import { toFieldValues, expectedFieldNames } from "../src/tds/docuseal";
 import type { AnswerMap } from "../src/tds/types";
 
 const errs = validateRegistry();
 console.log("registry errors:", errs.length ? errs : "none");
 console.log("questions:", QUESTIONS.length, "| docuseal fields:", expectedFieldNames().length);
-console.log("section C template fields:", sectionCTemplateFields().length);
 for (const c of CHAPTERS) {
   const n = questionsInChapter(c.id).length;
   if (n) console.log(`  ${c.title}: ${n} questions`, groupsInChapter(c.id).length ? `(${groupsInChapter(c.id).length} groups)` : "");
