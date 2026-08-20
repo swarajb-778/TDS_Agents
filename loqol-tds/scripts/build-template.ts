@@ -15,7 +15,7 @@
 
 import { readFileSync } from "node:fs";
 import { QUESTIONS, getQuestion } from "../src/tds/registry";
-import { expectedFieldNames, ROLES } from "../src/tds/docuseal";
+import { SIGNER_FIELDS, expectedFieldNames, ROLES } from "../src/tds/docuseal";
 
 interface Glyph {
   page: number;
@@ -90,9 +90,10 @@ const YES_NO_ROWS: Array<{ questionId: string; page: number; y: number }> = [
 
 interface Field {
   name: string;
-  type: "checkbox" | "text";
+  type: "checkbox" | "text" | "signature" | "initials" | "date";
   role: string;
   areas: Array<{ x: number; y: number; w: number; h: number; page: number }>;
+  preferences?: { font_size: number };
 }
 
 /**
@@ -109,12 +110,17 @@ const TEXT_SLOTS: Array<{
   questionId: string;
   page: number;
   rect: [number, number, number, number];
+  /** Inline-in-a-sentence slots need a smaller face or they run into the prose. */
+  fontSize?: number;
 }> = [
-  { questionId: "meta.city", page: 0, rect: [490.4, 81.1, 560.0, 93.0] },
-  { questionId: "meta.county", page: 0, rect: [28.0, 93.3, 100.0, 105.0] },
-  { questionId: "meta.property_description", page: 0, rect: [346.5, 93.3, 452.2, 105.0] },
-  { questionId: "meta.date", page: 0, rect: [209.0, 117.8, 260.0, 129.8] },
-  { questionId: "meta.units", page: 0, rect: [458.0, 71.0, 500.0, 81.5] },
+  { questionId: "meta.city", fontSize: 7, page: 0, rect: [490.4, 81.1, 560.0, 93.0] },
+  { questionId: "meta.county", fontSize: 7, page: 0, rect: [28.0, 93.3, 100.0, 105.0] },
+    // The token sits mid-sentence, but the rest of that line is blank, so the
+  // slot runs to the right margin. A full legal description does not fit in
+  // the token's own footprint at any readable size.
+  { questionId: "meta.property_description", fontSize: 6, page: 0, rect: [346.5, 93.5, 570.0, 105.0] },
+  { questionId: "meta.date", fontSize: 6, page: 0, rect: [209.0, 118.5, 246.0, 129.0] },
+  { questionId: "meta.units", fontSize: 7, page: 0, rect: [458.0, 71.0, 500.0, 81.5] },
   { questionId: "A.exhaust_fans_location", page: 0, rect: [110.0, 650.0, 192.0, 661.5] },
   { questionId: "A.220_wiring_location", page: 0, rect: [271.0, 650.0, 378.0, 661.5] },
   { questionId: "A.fireplace_location", page: 0, rect: [444.0, 650.0, 575.0, 661.5] },
@@ -143,6 +149,32 @@ function area(g: Glyph) {
 }
 
 const fields: Field[] = [];
+
+function pushRect(
+  name: string,
+  type: Field["type"],
+  role: string,
+  page: number,
+  [x0, y0, x1, y1]: [number, number, number, number],
+  fontSize?: number,
+) {
+  placedNames.add(name);
+  fields.push({
+    name,
+    type,
+    role,
+    ...(fontSize ? { preferences: { font_size: fontSize } } : {}),
+    areas: [
+      {
+        x: x0 / PAGE_W,
+        y: y0 / PAGE_H,
+        w: (x1 - x0) / PAGE_W,
+        h: (y1 - y0) / PAGE_H,
+        page: page + 1,
+      },
+    ],
+  });
+}
 const claimed = new Set<Glyph>();
 const problems: string[] = [];
 const warnings: string[] = [];
@@ -252,22 +284,47 @@ for (const slot of TEXT_SLOTS) {
     problems.push(`${slot.questionId}: expected a text or composed mapping`);
     continue;
   }
-  const [x0, y0, x1, y1] = slot.rect;
-  placedNames.add(name);
-  fields.push({
-    name,
-    type: "text",
-    role: ROLES.SELLER_1,
-    areas: [
-      {
-        x: x0 / PAGE_W,
-        y: y0 / PAGE_H,
-        w: (x1 - x0) / PAGE_W,
-        h: (y1 - y0) / PAGE_H,
-        page: slot.page + 1,
-      },
-    ],
-  });
+  pushRect(name, "text", ROLES.SELLER_1, slot.page, slot.rect, slot.fontSize);
+}
+
+// 5. Header slots that repeat the address and date on pages 2 and 3.
+for (const [name, page] of [
+  ["property_address_p2", 1],
+  ["date_p2", 1],
+  ["property_address_p3", 2],
+  ["date_p3", 2],
+] as const) {
+  const rect: [number, number, number, number] = name.startsWith("property")
+    ? [110, 18.5, 450, 30.5]
+    : [490, 18.5, 575, 30.5];
+  pushRect(name, "text", ROLES.SELLER_1, page, rect, 8);
+}
+
+// 6. Signatures, dates and initials.
+//
+// Only the three disclosure-stage roles. The buyer acknowledgement block and
+// the selling agent's line are left unassigned: at listing there is no buyer.
+const SIGNER_SLOTS: Record<string, { page: number; rect: [number, number, number, number] }> = {
+  seller1_signature: { page: 2, rect: [68, 56, 400, 74] },
+  seller1_date: { page: 2, rect: [438, 56, 575, 74] },
+  seller2_signature: { page: 2, rect: [68, 73, 400, 91] },
+  seller2_date: { page: 2, rect: [438, 73, 575, 91] },
+  agent_name: { page: 2, rect: [170, 409, 300, 427] },
+  agent_signature: { page: 2, rect: [326, 409, 450, 427] },
+  agent_date: { page: 2, rect: [479, 409, 575, 427] },
+  // Per-page initials exist only on page 1 of this PDF; pages 2 and 3 lost
+  // their initials rows in the same regeneration that dropped the checkboxes.
+  seller1_initials: { page: 0, rect: [396, 741.5, 432, 752] },
+  seller2_initials: { page: 0, rect: [454, 741.5, 490, 752] },
+};
+
+for (const signer of SIGNER_FIELDS) {
+  const slot = SIGNER_SLOTS[signer.name];
+  if (!slot) {
+    problems.push(`${signer.name}: no slot on the form`);
+    continue;
+  }
+  pushRect(signer.name, signer.type, signer.role, slot.page, slot.rect);
 }
 
 const plain = QUESTIONS.filter((q) => q.docuseal.kind === "checkbox").sort(

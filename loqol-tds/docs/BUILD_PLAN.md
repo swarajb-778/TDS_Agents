@@ -84,7 +84,7 @@ Two routes, use both:
   builder. Irregular layout, not worth automating.
 
 **Acceptance**
-- [x] Template exists in DocuSeal Test Mode — #5513507, 127 live fields
+- [x] Template exists in DocuSeal Test Mode — #5513725, 140 live fields
 - [x] `expectedFieldNames()` diffed against the real template — **zero fields in
       the template unknown to the registry**, and the 8 registry fields with no
       slot are enumerated and explained below
@@ -117,11 +117,27 @@ real form are simply absent from it. `scripts/prepare_pdf.py` strips those
 tokens to produce the template base, since a field placed over one renders on
 top of it and both become unreadable.
 
-**The 8 fields with no slot**, all confirmed by rendering the page:
+**Signers.** Three roles get fields: Seller 1, Seller 2, Listing Agent —
+signature, date and printed name, plus seller initials on page 1. The buyer
+acknowledgement block and the selling agent's line are deliberately left
+unassigned: a TDS is completed at listing and there is no buyer yet. Names live
+in `SIGNER_FIELDS` in `docuseal.ts` rather than the registry, because nobody
+*answers* a signature and the registry is a catalogue of questions.
+
+Marking a submitter complete over the API is **not** enough to produce a
+signature — a signature field with no value stays blank, which is correct
+behaviour. `scripts/fill-pdf.ts` supplies one per role. In the product each of
+those is a person clicking sign.
+
+**The 4 fields with no slot**, all confirmed by rendering the page:
 `a_fireplace`, `a_exhaust_fans`, `a_220_wiring` — no checkbox exists on this
 form, only an "in ______" blank, which their location text fields do fill.
-`property_address`, `property_address_p2/p3`, `date_p2/p3` — this version has no
-street-address line and no per-page footers.
+`property_address` — page 1 has no street-address line, though pages 2 and 3
+each repeat one, and `toFieldValues()` mirrors the answer into both.
+
+**Cosmetic limits of this PDF.** Header fields sit mid-sentence, so the date and
+legal description are rendered at 6pt to fit the prose around them. The real
+C.A.R. form gives the legal description its own line.
 
 **Gotcha:** Test Mode has its own separate API key. Don't pay for anything.
 

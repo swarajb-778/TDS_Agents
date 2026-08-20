@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { closeDb, db } from "../src/db/index";
 import { agents, deals } from "../src/db/schema";
 import { loadAnswers } from "../src/db/answers";
-import { buildSubmission, toFieldValues } from "../src/tds/docuseal";
+import { SIGNER_FIELDS, buildSubmission, toFieldValues } from "../src/tds/docuseal";
 
 const sellerName = process.argv[2] ?? "Marcus Oyelaran";
 const key = process.env.DOCUSEAL_API_KEY!;
@@ -51,15 +51,48 @@ const created = await api("/submissions", {
   body: JSON.stringify(payload),
 });
 
-const submitters = Array.isArray(created) ? created : created.submitters;
+const submitters: Array<{ id: number; submission_id: number; role: string }> =
+  Array.isArray(created) ? created : created.submitters;
 const seller = submitters[0];
-console.log(`submission ${seller.submission_id}, submitter ${seller.id}`);
+console.log(
+  `submission ${seller.submission_id}: ${submitters.map((s) => s.role).join(", ")}`,
+);
 
-// Test Mode: complete it so DocuSeal renders the document.
-await api(`/submitters/${seller.id}`, {
-  method: "PUT",
-  body: JSON.stringify({ completed: true }),
-});
+/**
+ * Test Mode: sign on each submitter's behalf so DocuSeal renders an executed
+ * document. Marking a submitter complete is not enough — a signature field with
+ * no value stays blank, which is exactly right, and is why this has to supply
+ * one. In the product every one of these is a person clicking sign.
+ */
+const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+const today = new Date().toISOString().slice(0, 10);
+
+for (const submitter of submitters) {
+  const name = submitter.role === "Listing Agent" ? agent.name : deal.sellerName;
+  const signerValues: Record<string, string> = {};
+
+  for (const field of SIGNER_FIELDS) {
+    if (field.role !== submitter.role) continue;
+    signerValues[field.name] =
+      field.type === "initials"
+        ? initialsOf(name)
+        : field.type === "date"
+          ? today
+          : name;
+  }
+
+  await api(`/submitters/${submitter.id}`, {
+    method: "PUT",
+    body: JSON.stringify({ completed: true, values: signerValues }),
+  });
+  console.log(`  signed as ${submitter.role}: ${Object.keys(signerValues).join(", ")}`);
+}
 
 let docs: Array<{ name: string; url: string }> = [];
 for (let i = 0; i < 20 && docs.length === 0; i++) {

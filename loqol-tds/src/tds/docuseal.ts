@@ -46,6 +46,34 @@ export const DISCLOSURE_STAGE_ROLES = [
   ROLES.LISTING_AGENT,
 ];
 
+/**
+ * Signer fields. Not registry entries — nobody *answers* a signature, and the
+ * registry is a catalogue of questions. These live here beside the roles they
+ * belong to, and geometry is resolved in scripts/build-template.ts like
+ * everything else.
+ *
+ * Only the three disclosure-stage roles appear. The buyer acknowledgement block
+ * and the selling agent's line are left unassigned on purpose: a TDS is
+ * completed at listing and there is no buyer yet.
+ */
+export interface SignerField {
+  name: string;
+  type: "signature" | "initials" | "date" | "text";
+  role: string;
+}
+
+export const SIGNER_FIELDS: SignerField[] = [
+  { name: "seller1_signature", type: "signature", role: ROLES.SELLER_1 },
+  { name: "seller1_date", type: "date", role: ROLES.SELLER_1 },
+  { name: "seller1_initials", type: "initials", role: ROLES.SELLER_1 },
+  { name: "seller2_signature", type: "signature", role: ROLES.SELLER_2 },
+  { name: "seller2_date", type: "date", role: ROLES.SELLER_2 },
+  { name: "seller2_initials", type: "initials", role: ROLES.SELLER_2 },
+  { name: "agent_name", type: "text", role: ROLES.LISTING_AGENT },
+  { name: "agent_signature", type: "signature", role: ROLES.LISTING_AGENT },
+  { name: "agent_date", type: "date", role: ROLES.LISTING_AGENT },
+];
+
 // ---------------------------------------------------------------------------
 // Values
 // ---------------------------------------------------------------------------
@@ -163,6 +191,19 @@ export function toFieldValues(answers: AnswerMap): FieldValues {
     out["date_p3"] = text(date.value);
   }
 
+  // Pages 2 and 3 each repeat the address and date in their header. One
+  // answer, three slots — mirrored here rather than asked for three times.
+  const address = out["property_address"];
+  if (typeof address === "string" && address) {
+    out["property_address_p2"] = address;
+    out["property_address_p3"] = address;
+  }
+  const disclosureDate = out["disclosure_date"];
+  if (typeof disclosureDate === "string" && disclosureDate) {
+    out["date_p2"] = disclosureDate;
+    out["date_p3"] = disclosureDate;
+  }
+
   return out;
 }
 
@@ -263,8 +304,10 @@ export function expectedFieldNames(): string[] {
       Object.values(m.fields).forEach((f) => names.add(f));
     }
   }
+  // Repeated header slots on pages 2 and 3, filled from the same answer.
   ["property_address_p2", "property_address_p3", "date_p2", "date_p3"].forEach(
     (f) => names.add(f),
   );
+  SIGNER_FIELDS.forEach((f) => names.add(f.name));
   return [...names].sort();
 }
