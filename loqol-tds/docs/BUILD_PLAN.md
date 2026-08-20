@@ -16,7 +16,7 @@ conflict rules, field mapping. See `docs/REGISTRY.md`.
 
 ---
 
-## 1. Database and seed
+## ✅ 1. Database and seed — DONE
 
 **Goal:** persistence for everything the registry produces.
 
@@ -24,10 +24,15 @@ Tables: `agents`, `deals`, `disclosure_requests`, `answers`, `sessions`.
 `answers` unique on `(deal_id, question_id)`.
 
 **Acceptance**
-- [ ] Drizzle schema + migration runs clean
-- [ ] Seed script creates one agent, one deal, one disclosure request with token
-- [ ] Answer upsert helper that records `source`, `confidence`, `verbatim`
-- [ ] Every answer mutation writes an audit row (who, what, when, from where)
+- [x] Drizzle schema + migration runs clean
+- [x] Seed script creates one agent, one deal, one disclosure request with token
+- [x] Answer upsert helper that records `source`, `confidence`, `verbatim`
+- [x] Every answer mutation writes an audit row (who, what, when, from where)
+
+Verified against a live Supabase instance: `npm run db:migrate && npm run
+db:seed && npm run db:check`. The seeded mid-flow deal reports 35%, an agent
+queue of two, one deferred question, and three detected conflicts — all read
+back out of the database, not from memory.
 
 **Gotcha:** store the seller token *hashed*. The plaintext exists only in the
 link you email.

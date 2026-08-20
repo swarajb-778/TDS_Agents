@@ -63,7 +63,14 @@ validator errors. Gates, follow-up queue-jumping, progress, resume, 19 conflict
 rules, field mapping, and Section C template geometry are all implemented and
 exercised by `scripts/smoke.ts`.
 
-**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md`.
+**Done and running against Supabase:** `src/db/` — schema, migration, seed, and
+the answer repository. `loadAnswers()` returns the `AnswerMap` the flow engine
+consumes; `writeAnswer()` is the single write path for both modalities and all
+four answer statuses, and every mutation lands an `answer_events` row in the
+same transaction. `npm run db:check` asserts the round-trip.
+
+**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` — the
+seller form path for "What's in the home".
 
 **Known stub:** `SECTION_C_GEOMETRY` in `docuseal.ts` has placeholder
 coordinates. Real row baselines need extracting from the PDF.
