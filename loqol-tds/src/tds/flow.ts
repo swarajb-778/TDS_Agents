@@ -86,6 +86,25 @@ export function synthesiseFollowUp(parent: Question): Question | null {
   };
 }
 
+/**
+ * Look up a question by id, including follow-ups.
+ *
+ * Follow-ups are synthesised rather than stored, so `getQuestion("C.13.explanation")`
+ * is undefined. Anything that accepts a question id from the outside — a voice
+ * tool call, a form POST, an answer row — has to go through here, or writing an
+ * explanation fails as "unknown question".
+ */
+export function resolveQuestion(id: string): Question | undefined {
+  const direct = getQuestion(id);
+  if (direct) return direct;
+
+  const suffix = ".explanation";
+  if (!id.endsWith(suffix)) return undefined;
+
+  const parent = getQuestion(id.slice(0, -suffix.length));
+  return parent ? (synthesiseFollowUp(parent) ?? undefined) : undefined;
+}
+
 function followUpDue(parent: Question, answers: AnswerMap): boolean {
   if (!parent.followUp) return false;
   const a = answers[parent.id];
@@ -120,7 +139,7 @@ export function nextQuestion(
   currentId?: string,
 ): NextResult {
   const queue = visibleQuestions(answers);
-  const current = currentId ? getQuestion(currentId) : undefined;
+  const current = currentId ? resolveQuestion(currentId) : undefined;
   const currentChapter = current?.chapter ?? null;
 
   // A follow-up on the question just answered comes next, always. Capture the
@@ -407,7 +426,7 @@ export function validateAnswer(
   value: AnswerValue,
   confidence?: number,
 ): { ok: true } | { ok: false; reason: string } {
-  const q = getQuestion(questionId);
+  const q = resolveQuestion(questionId);
   if (!q) return { ok: false, reason: `Unknown question: ${questionId}` };
 
   if (confidence !== undefined && confidence < CONFIDENCE_THRESHOLD) {
