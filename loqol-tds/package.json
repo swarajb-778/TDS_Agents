@@ -5,6 +5,9 @@
   "type": "module",
   "description": "California TDS seller disclosure \u2014 question registry, flow engine, and DocuSeal mapping",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "typecheck": "tsc --noEmit",
     "validate": "tsx scripts/validate.ts",
     "smoke": "tsx scripts/smoke.ts",
@@ -12,16 +15,24 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
     "db:check": "tsx scripts/db-check.ts",
-    "check": "npm run typecheck && npm run validate && npm run smoke"
+    "check": "npm run typecheck && npm run validate && npm run smoke && npm run form:check",
+    "form:check": "tsx scripts/form-check.ts"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "drizzle-kit": "^0.31.10",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.9"
+    "next": "^16.3.1",
+    "postgres": "^3.4.9",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

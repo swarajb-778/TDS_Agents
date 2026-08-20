@@ -69,8 +69,13 @@ consumes; `writeAnswer()` is the single write path for both modalities and all
 four answer statuses, and every mutation lands an `answer_events` row in the
 same transaction. `npm run db:check` asserts the round-trip.
 
-**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` — the
-seller form path for "What's in the home".
+**Done:** the seller form path for "What's in the home" — `src/app/s/[token]/`,
+Next.js App Router, phone-first. Nine groups of tap-to-add chips with a confirm
+per group; `src/tds/form-view.ts` holds the pure projection (chip vs explicit
+yes/no, landing group) so it can be asserted without a browser.
+
+**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` —
+DocuSeal template and the first filled PDF.
 
 **Known stub:** `SECTION_C_GEOMETRY` in `docuseal.ts` has placeholder
 coordinates. Real row baselines need extracting from the PDF.

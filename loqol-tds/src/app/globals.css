@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/*
+ * A stressed person on a phone at 10pm. Big targets, high contrast, nothing
+ * that needs a steady hand.
+ */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Never let a mis-tap select text instead of pressing the control. */
+button {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}

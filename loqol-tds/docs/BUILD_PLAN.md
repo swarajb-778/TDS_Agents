@@ -39,7 +39,7 @@ link you email.
 
 ---
 
-## 2. Seller form path — "What's in the home" only
+## ✅ 2. Seller form path — "What's in the home" — DONE
 
 **Goal:** one chapter, end to end, real answers in the DB.
 
@@ -49,11 +49,22 @@ up or doesn't. Everything needed is exported: `groupsInChapter`, `isVisible`,
 `questionsInChapter`, option lists.
 
 **Acceptance**
-- [ ] Renders from the registry — zero hardcoded labels
-- [ ] Grouped by `group`, tappable grid, thumb-reachable on mobile
-- [ ] Gated questions appear/disappear live (`A.garage` → `A.garage_type`)
-- [ ] Optimistic local write, then server; survives a hard refresh mid-chapter
-- [ ] Mic affordance on every question (can be a no-op stub for now)
+- [x] Renders from the registry — zero hardcoded labels
+- [x] Grouped by `group`, tappable grid, thumb-reachable on mobile
+- [x] Gated questions appear/disappear live (`A.garage` → `A.garage_type`)
+- [x] Optimistic local write, then server; survives a hard refresh mid-chapter
+- [x] Mic affordance on every question (can be a no-op stub for now)
+
+Verified in a 375px browser against the seeded deal: nine groups walked end to
+end, taps persisted with `source: "form"`, tapping Fireplace revealed both its
+gated chip and its gated text field without a round trip, and a hard refresh
+landed back on the right group with state intact.
+
+**Interaction:** tap-what-you-have chips, then one confirm per group that turns
+untapped chips into an explicit `false`. Booleans phrased as questions in the
+registry ("Is there a child-resistant barrier?") get an explicit Yes/No instead
+— derived from the label, not a hardcoded list. `scripts/form-check.ts` asserts
+that split, and that every group stays reachable.
 
 **Do not** build a scrolling replica of the PDF page. Chunk it.
 

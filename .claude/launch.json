@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "loqol-tds",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "loqol-tds", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
