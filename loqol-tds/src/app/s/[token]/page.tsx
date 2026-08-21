@@ -1,6 +1,6 @@
 import { loadAnswers } from "@/db/answers";
 import { resolveSellerToken } from "@/db/requests";
-import { FeaturesChapter } from "./features-chapter";
+import { SellerFlow } from "./seller-flow";
 
 // Every visit reads the seller's current answers, so nothing here is cacheable.
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function SellerPage({
   const answers = await loadAnswers(session.dealId);
 
   return (
-    <FeaturesChapter
+    <SellerFlow
       token={token}
       sellerName={session.sellerName}
       initialAnswers={answers}

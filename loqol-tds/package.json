@@ -19,7 +19,8 @@
     "form:check": "tsx scripts/form-check.ts",
     "docuseal:template": "tsx scripts/build-template.ts",
     "docuseal:create": "tsx scripts/build-template.ts --create",
-    "docuseal:fill": "tsx scripts/fill-pdf.ts"
+    "docuseal:fill": "tsx scripts/fill-pdf.ts",
+    "voice:check": "tsx scripts/voice-check.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

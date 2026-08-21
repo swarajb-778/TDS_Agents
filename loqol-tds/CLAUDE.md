@@ -78,8 +78,12 @@ yes/no, landing group) so it can be asserted without a browser.
 own checkbox glyphs by `scripts/build-template.ts`; `scripts/fill-pdf.ts` turns
 a seeded deal into a real filled, signable PDF.
 
-**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` — the
-voice path for Section C.
+**Done:** the voice path — `src/app/s/[token]/voice-chapter.tsx` over WebRTC,
+`/api/voice/session` for ephemeral tokens, `/api/voice/tool` for server-executed
+tool calls. `src/tds/voice.ts` builds the agent's brief from the registry.
+
+**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` — handoff,
+resume and progress.
 
 **Known gaps:** 4 of 144 registry fields have no slot on the supplied PDF — it
 is a paraphrased TDS, not the official C.A.R. form. Enumerated in

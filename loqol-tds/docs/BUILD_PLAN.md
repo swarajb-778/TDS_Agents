@@ -143,7 +143,7 @@ C.A.R. form gives the legal description its own line.
 
 ---
 
-## 4. Voice path — "Things you know about" (Section C)
+## ✅ 4. Voice path — DONE (all voice chapters, not just Section C)
 
 **Goal:** the hardest and most impressive piece. Sixteen questions that are
 unintelligible as written, asked conversationally.
@@ -152,13 +152,40 @@ Server mints an ephemeral Realtime token; browser connects over WebRTC. Agent
 gets `voiceToolSchemas()`. Server owns the queue via `nextQuestion()`.
 
 **Acceptance**
-- [ ] Entirely in-browser — no phone numbers, no telephony
-- [ ] Agent asks using `voicePrompt`, explains using `plainEnglish` + `examples`
-- [ ] Every write passes `validateAnswer()`; confidence < 0.75 → re-ask
-- [ ] `record_explanation` fires immediately after a yes, before the next question
-- [ ] `mark_unknown` probes the "don't know" vs "not aware" distinction first
-- [ ] `switch_to_form` hands off instantly, no pushback
-- [ ] Live transcript visible on screen — the seller should see what's being recorded
+- [x] Entirely in-browser — OpenAI Realtime over WebRTC, no telephony
+- [x] Agent asks using `voicePrompt`, explains using `plainEnglish` + `examples`
+- [x] Every write passes `validateAnswer()`; confidence < 0.75 → re-ask
+- [x] `record_explanation` fires immediately after a yes, before the next question
+- [x] `mark_unknown` probes the "don't know" vs "not aware" distinction first
+- [x] `switch_to_form` hands off instantly, no pushback
+- [x] Live transcript visible on screen, plus a running list of what has been
+      written down
+
+Built for every voice chapter (`condition`, `defects`, `awareness`), not only
+Section C — the brief is generated from the registry, so the chapter is a
+parameter.
+
+**Where the state machine lives.** `/api/voice/tool` executes every tool call
+server-side: it validates through `writeAnswer()` and answers with the next
+question from `nextQuestion()`. The model is told, in the system prompt, that it
+does not choose the order. `scripts/voice-check.ts` calls that route handler
+directly with the calls a model would make and asserts the model cannot move the
+queue, cannot write an unvalidated value, cannot talk past a low-confidence
+reading, and cannot invent a question id.
+
+**Keys.** The standing `OPENAI_API_KEY` never reaches the browser.
+`/api/voice/session` mints a 10-minute ephemeral token, and only for a caller
+holding a valid magic link — verified by asserting the client payload contains
+no `sk-proj`, and that an unknown token gets a 401 from both voice routes.
+
+**Never stranded.** "Just show me the buttons" is present in every state, not
+only mid-call. A seller who blocks the microphone would otherwise be sitting on
+a screen whose only control needs a microphone.
+
+**Not verified:** a live spoken conversation. The browser available here blocks
+microphone capture, so WebRTC negotiation and real speech are untested. Server
+side, prompt, tool contract, token minting, auth rejection, mic-denied fallback
+and the voice→form handoff are all verified.
 
 **Gotcha:** the agent must not add facts the seller didn't state when drafting
 explanations. Put that in the system prompt explicitly.

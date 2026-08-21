@@ -1,0 +1,97 @@
+"use client";
+
+import { useState } from "react";
+import { questionsInChapter, getChapter } from "@/tds/registry";
+import { isVisible, progress } from "@/tds/flow";
+import type { AnswerMap, AnswerStatus, AnswerValue, ChapterId } from "@/tds/types";
+import { QuestionControl } from "./question-control";
+
+/**
+ * The plain form rendering of a chapter — one control per visible question.
+ *
+ * This is where "just show me the buttons" lands. It is not a lesser path: the
+ * same store, the same validation, the same audit trail.
+ */
+
+interface Props {
+  token: string;
+  chapter: ChapterId;
+  initialAnswers: AnswerMap;
+  onSwitchToVoice?: () => void;
+}
+
+export function QuestionList({ token, chapter, initialAnswers, onSwitchToVoice }: Props) {
+  const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
+  const [unsaved, setUnsaved] = useState(false);
+
+  const meta = getChapter(chapter);
+  const visible = questionsInChapter(chapter).filter((q) => isVisible(q, answers));
+  const p = progress(answers).chapters.find((c) => c.chapter === chapter);
+
+  async function record(
+    questionId: string,
+    value: AnswerValue,
+    status: AnswerStatus = "answered",
+  ) {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: {
+        questionId,
+        value,
+        status,
+        source: "form",
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+    try {
+      const res = await fetch("/api/answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, answers: [{ questionId, value, status, source: "form" }] }),
+      });
+      setUnsaved(!res.ok);
+    } catch {
+      setUnsaved(true);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-lg px-4 pb-24 pt-6">
+      <p className="text-sm font-medium text-stone-500">{meta?.title}</p>
+      <h1 className="mt-1 text-2xl font-semibold text-stone-900">{meta?.intro}</h1>
+      {p && (
+        <p className="mt-2 text-sm text-stone-400">
+          {p.answered} of {p.total} answered
+        </p>
+      )}
+
+      {onSwitchToVoice && (
+        <button
+          type="button"
+          onClick={onSwitchToVoice}
+          className="mt-4 text-sm font-medium text-teal-800 underline underline-offset-4"
+        >
+          Go back to talking it through
+        </button>
+      )}
+
+      {unsaved && (
+        <p className="mt-4 text-sm text-amber-700">
+          Couldn&rsquo;t reach the server just now. Your answers are still here.
+        </p>
+      )}
+
+      <div className="mt-5 space-y-3">
+        {visible.map((q) => (
+          <QuestionControl
+            key={q.id}
+            question={q}
+            answer={answers[q.id]}
+            onChange={(value, status) => record(q.id, value, status ?? "answered")}
+            onVoice={() => onSwitchToVoice?.()}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}

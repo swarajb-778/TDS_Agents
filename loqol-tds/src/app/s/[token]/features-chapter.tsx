@@ -38,9 +38,16 @@ interface Props {
   token: string;
   sellerName: string;
   initialAnswers: AnswerMap;
+  /** Chapter finished — the flow re-derives where the seller goes next. */
+  onChapterDone?: () => void;
 }
 
-export function FeaturesChapter({ token, sellerName, initialAnswers }: Props) {
+export function FeaturesChapter({
+  token,
+  sellerName,
+  initialAnswers,
+  onChapterDone,
+}: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [index, setIndex] = useState(() => firstIncompleteGroup(CHAPTER, initialAnswers));
   const [unsaved, setUnsaved] = useState(false);
@@ -127,10 +134,19 @@ export function FeaturesChapter({ token, sellerName, initialAnswers }: Props) {
         </h1>
 
         {stillOpen.length === 0 ? (
-          <p className="mt-3 text-stone-600">
-            You&rsquo;ve been through everything in the home. Next comes a short
-            conversation about anything that isn&rsquo;t working properly.
-          </p>
+          <>
+            <p className="mt-3 text-stone-600">
+              You&rsquo;ve been through everything in the home. Next comes a short
+              conversation about anything that isn&rsquo;t working properly.
+            </p>
+            <button
+              type="button"
+              onClick={() => onChapterDone?.()}
+              className="mt-5 min-h-14 w-full rounded-xl bg-teal-700 px-5 font-semibold text-white active:bg-teal-800"
+            >
+              Keep going
+            </button>
+          </>
         ) : (
           <>
             <p className="mt-3 text-stone-600">
