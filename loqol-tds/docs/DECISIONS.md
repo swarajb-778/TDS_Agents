@@ -415,7 +415,88 @@ not a gap.
 
 ---
 
-## 8. What I skipped, and why
+## 8. The interface
+
+Two surfaces, two users, one system. A stressed non-technical person completing
+a legal document on a phone at 10pm, and a professional reading what they
+submitted on a desktop. Neither is helped by anything fashionable.
+
+### 8.1 Where the style came from, and where I overrode it
+
+I ran the product through a design-system generator. Querying it on "real
+estate" returned a **luxury marketing landing page** — Exaggerated Minimalism,
+`clamp(3rem, 10vw, 12rem)` headings, Cinzel display serif. That is a plausible
+answer for a brokerage's homepage and an actively hostile one for a form.
+
+Querying the actual product type — form completion under stress, plain
+language, accessibility — returned **"Accessible & Ethical"**: the profile for
+government, healthcare and legal-compliance products. High contrast, 16px+
+body, visible focus, 44px targets, motion that can be turned off, WCAG AAA.
+That is the system this is built on.
+
+Two of its recommendations I did not take:
+
+**Orange `#F97316` as the call-to-action.** Amber already means one thing in
+this product: *two of your answers disagree, have a look.* An orange submit
+button would put the one signal that matters into competition with every button
+on the screen. Warm colour is reserved; the primary is a deep teal, which also
+leaves the whole warm half of the spectrum free.
+
+**A second font family for the dashboard.** The real requirement was tabular
+figures so data columns do not jitter. `font-variant-numeric: tabular-nums`
+gives that from the one font already loaded.
+
+### 8.2 Tokens, and why contrast is a test rather than a claim
+
+Components never write a raw hex. `globals.css` defines semantic tokens —
+`canvas`, `surface`, `ink`, `ink-muted`, `brand`, `attention`, `danger` — and
+both themes are designed rather than inverted. Dark mode is not decoration
+here: the brief's seller is doing this *"at 10pm after work"*, so a phone in a
+dark room is the actual usage context.
+
+`npm run contrast:check` parses the real values out of `globals.css` and asserts
+sixteen foreground/background pairs against WCAG **in both themes**. It is a
+test because contrast is the first accessibility rule and the easiest to get
+wrong by eye — a dark palette that looks fine can sit at 2:1.
+
+It caught three failures immediately: input borders at 2.13:1 and 1.93:1 against
+the 3:1 minimum for non-text UI, and hint text at 4.22:1 against 4.5:1. All
+three would have shipped.
+
+### 8.3 Four bugs found by looking rather than assuming
+
+**Light mode never shipped.** Tailwind v4's `@theme` is a build-time directive;
+nesting it inside `@media` does not make it conditional. Tailwind hoisted both
+blocks and the dark one overwrote the light one, so the compiled CSS contained
+no `prefers-color-scheme` rule at all. It looked correct only because the test
+browser happened to be in dark mode. Dark now overrides through a plain `:root`
+rule inside the media query, and the compiled output was checked for both.
+
+**The login page redirected to itself.** `/agent/login` sat inside the layout
+that sends unauthenticated visitors to `/agent/login`. Infinite loop; login was
+unreachable. Fixed with a route group so the guard covers the app pages only.
+
+**Connection pool exhaustion.** Every hot reload opened a fresh Postgres pool
+against Supabase's fifteen-client session pooler. The same shape hurts in
+production, where each serverless instance opens its own against the same
+fifteen. Capped at five, idle-timed, and reused across reloads.
+
+**The escape hatches were the hardest things to tap.** *"Leave the rest for my
+agent"*, *"rather say it out loud"*, *"come back to this"* — the affordances a
+struggling seller most needs — rendered as 20px inline links against a 44px
+minimum. Their hit areas now extend past their visual bounds.
+
+### 8.4 What the interface does not do
+
+No theme toggle: the OS preference is respected and nothing overrides it. No
+animation beyond 150–200ms state transitions, all of which stop under
+`prefers-reduced-motion`. No icon library — the few affordances are words,
+because words survive translation, screen readers, and a seller who has never
+seen this product before.
+
+---
+
+## 9. What I skipped, and why
 
 The brief asks for deliberate choices about what to handle and what to skip. A
 stated omission reads as a decision; a silent gap reads as unfinished.
@@ -450,10 +531,10 @@ stated omission reads as a decision; a silent gap reads as unfinished.
 
 ---
 
-## 9. How to check any of this
+## 10. How to check any of this
 
 ```bash
-npm run check        # typecheck + registry integrity + flow + form projection
+npm run check        # typecheck, registry, flow, form projection, contrast
 npm run db:check     # upsert, audit trail, statuses, conflicts, credentials
 npm run voice:check  # the voice tool contract, against the real route handler
 npm run docuseal:fill "Marcus Oyelaran"   # a real filled, signed PDF

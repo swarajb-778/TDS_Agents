@@ -73,8 +73,9 @@ export function QuestionList({
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-24 pt-6">
-      <p className="text-sm font-medium text-ink-muted">{meta?.title}</p>
-      <h1 className="mt-1 text-2xl font-semibold text-ink">{meta?.intro}</h1>
+      {/* The chapter name is already in the sticky header above; repeating it
+          here only pushes the actual question further down the screen. */}
+      <h1 className="text-2xl font-semibold text-ink">{meta?.intro}</h1>
       {p && (
         <p className="mt-2 text-sm text-ink-faint">
           {p.answered} of {p.total} answered
