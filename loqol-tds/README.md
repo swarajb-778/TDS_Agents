@@ -28,10 +28,77 @@ deals: one untouched, one mid-flow carrying all four answer statuses, a voice
 answer with its verbatim, a follow-up explanation, and a pair of answers that
 trips a hard conflict rule. Open either magic link to be the seller.
 
+## Try it
+
+`npm run db:seed` prints two magic links and the agent login. Open the links in
+a **phone-sized window** — the seller flow is designed phone-first.
+
+**Dana Reyes** starts fresh. **Marcus Oyelaran** is mid-flow and already carries
+all four answer statuses, a voice answer with its verbatim, and a pair of
+answers that trips a hard conflict.
+
+### As the seller
+
+1. **Open Dana's link.** You land on a welcome screen naming where you are and
+   how long is left — not a percentage.
+2. **"What's in the home."** Tap what the house has, then *"That's everything
+   here."* That confirm is what turns untapped chips into an explicit *no*.
+   Tap **Fireplace** and watch two more questions appear without a reload.
+3. **Tap "Come back to this"** on any question. It will not be re-asked
+   immediately — it returns once nothing new is left.
+4. **Close the tab and reopen the same link.** You land back in the same place.
+   Nothing is stored about your position; it is derived from your answers.
+5. **Keep going to "Anything not working."** That chapter is voice-first. Press
+   **Start talking** and allow the microphone. If you deny it, or you would
+   rather not, *"Just show me the buttons"* is there in every state.
+6. **In voice, try these deliberately:** hedge on an answer ("I think so,
+   maybe?") and watch it re-ask rather than record. Say *"I don't know"* and
+   watch it check whether you mean *"not aware of any"* — different answers on
+   a TDS. Say *"can you just show me the buttons"* and it hands over without
+   arguing.
+7. **Contradict yourself.** Answer *yes* to the HOA question and *no* to the one
+   about written rules. A quiet note appears on that card. It does not block.
+8. **Finish, and read the review screen.** Both sides of each contradiction are
+   quoted back in your own words — including what you actually said out loud if
+   it came from voice. Choose *"Both are right"* and it is recorded, not
+   corrected.
+
+### As the agent
+
+Sign in at `/agent/login` with the credentials the seed printed.
+
+1. The list shows every seller with derived status, progress, and how many
+   things need you. Nothing about status is stored — it is computed from the
+   answers.
+2. Open **Marcus**. The top three tiles are the actual work: what he could not
+   answer, what does not line up, what he set aside. Below that, every answer
+   with **where it came from** — tapped, spoken, or filled by you — and his own
+   words underneath.
+3. **New disclosure** creates a seller, prefills the property details they
+   cannot reasonably know, and issues a link. The link is shown once.
+4. **"Send a fresh link"** revokes the old one, so only ever one works.
+
+### The end-to-end PDF
+
+```bash
+npm run docuseal:fill "Marcus Oyelaran"
+```
+
+Writes `filled-tds-marcus.pdf`. Page 1 has the checkboxes and header, page 2 has
+Section C with the numbered shared explain box, page 3 has the signatures.
+
+### Things worth trying to break
+
+- Open a seller link with a character changed &mdash; you get the expired-link
+  screen, not an error.
+- Sign out, then visit `/agent` &mdash; you are redirected, not shown data.
+- With the browser in dark mode, reload anything. Both themes are designed;
+  `npm run contrast:check` asserts every colour pair in both.
+
 ## Check it
 
 ```bash
-npm run check        # typecheck + registry integrity + flow + form projection
+npm run check        # typecheck, registry, flow, form projection, WCAG contrast
 npm run db:check     # upsert vs audit trail, answer statuses, conflicts, credentials
 npm run voice:check  # the voice tool contract, against the real route handler
 ```
@@ -122,7 +189,9 @@ sync, so switching mid-question costs nothing to support.
 | Voice | OpenAI Realtime over WebRTC, server-owned queue |
 | Resume, handoff, progress | Position derived; chapters and minutes |
 | Conflicts | Inline notes and a review screen; standing-by recorded |
-| **Agent view** | **Not built** — see `docs/DECISIONS.md` §8 |
+| Agent view | Signed-cookie auth, CSRF, derived status, full review |
+| Design system | Semantic tokens, both themes, contrast asserted |
 
-Known gaps are enumerated in [`docs/DECISIONS.md`](docs/DECISIONS.md) §8 rather
-than left to be discovered.
+All eight tasks in [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) are complete. Known
+gaps are enumerated in [`docs/DECISIONS.md`](docs/DECISIONS.md) §9 rather than
+left to be discovered.
