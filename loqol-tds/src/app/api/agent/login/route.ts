@@ -6,6 +6,7 @@ import {
   issueSession,
   newCsrfToken,
 } from "@/db/auth";
+import { clearLoginAttempts, recordLoginAttempt } from "@/db/rate-limit";
 
 export async function POST(request: Request) {
   let body: { email?: unknown; password?: unknown };
@@ -18,6 +19,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter your email and password." }, { status: 400 });
   }
 
+  // Counted before the password is checked, so a wrong guess costs the same as
+  // a right one. x-forwarded-for is the platform's; behind no proxy it is
+  // absent and everyone shares one bucket, which only tightens the limit.
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const limit = recordLoginAttempt(body.email, ip);
+  if (!limit.ok) {
+    return NextResponse.json(
+      {
+        error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+      },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   const agent = await authenticate(body.email, body.password);
   if (!agent) {
     // Deliberately identical for unknown email and wrong password.
@@ -26,6 +41,8 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
+
+  clearLoginAttempts(body.email);
 
   const session = issueSession(agent.id);
   const csrf = newCsrfToken();

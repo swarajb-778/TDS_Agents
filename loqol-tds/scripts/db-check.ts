@@ -13,6 +13,8 @@ import { closeDb, db } from "../src/db/index";
 import { agents, answerEvents, answers, deals } from "../src/db/schema";
 import { answerHistory, loadAnswers, writeAnswer, type Actor } from "../src/db/answers";
 import { hashPassword, hashToken, mintSellerToken, verifyPassword } from "../src/db/crypto";
+import { authenticate } from "../src/db/auth";
+import { clearLoginAttempts, recordLoginAttempt } from "../src/db/rate-limit";
 import { agentQueue, nextQuestion, progress } from "../src/tds/flow";
 import { detectConflicts } from "../src/tds/conflicts";
 import {
@@ -206,6 +208,49 @@ async function main(): Promise<void> {
   reviewed = await reviewConflicts(DEAL_ID, await loadAnswers(DEAL_ID));
   assert.equal(reviewed.find((c) => c.ruleId === "hoa_without_ccrs")?.acknowledged, false, "changing their mind must work");
   console.log("✓ conflicts detected, acknowledgeable, and never auto-corrected");
+
+  // 8. Login must not leak which emails exist — by message OR by clock.
+  const missAt = performance.now();
+  assert.equal(await authenticate("nobody-here@loqol.test", "whatever"), null);
+  const missMs = performance.now() - missAt;
+
+  const wrongAt = performance.now();
+  assert.equal(await authenticate("db-check@loqol.test", "whatever"), null);
+  const wrongMs = performance.now() - wrongAt;
+
+  // An early return on a missing row skips scrypt entirely, which is a
+  // measurable oracle. Both paths must pay for one hash.
+  const ratio = Math.max(missMs, wrongMs) / Math.max(1, Math.min(missMs, wrongMs));
+  assert.ok(
+    ratio < 3,
+    `unknown-email and wrong-password must take comparable time (was ${ratio.toFixed(1)}x)`,
+  );
+  // And the right password still works, so the decoy hash has not broken login.
+  const good = await authenticate("db-check@loqol.test", "scratch");
+  assert.ok(good, "a correct password must still authenticate");
+  assert.equal(good.email, "db-check@loqol.test");
+  console.log("✓ login reveals nothing by message or by timing");
+
+  // 9. Throttling is a cooldown, never a lock — a lock on a known email is a
+  //    free denial-of-service against that agent.
+  const victim = "throttle-check@loqol.test";
+  let verdict = { ok: true, retryAfterSeconds: 0 };
+  for (let i = 0; i < 6; i++) verdict = recordLoginAttempt(victim, "203.0.113.7");
+  assert.equal(verdict.ok, false, "the sixth attempt in the window must be refused");
+  assert.ok(verdict.retryAfterSeconds > 0, "refusal must name when they can retry");
+  assert.ok(verdict.retryAfterSeconds <= 900, "and it must expire, not persist");
+  assert.equal(
+    recordLoginAttempt("someone-else@loqol.test", "198.51.100.4").ok,
+    true,
+    "one throttled email must not throttle another",
+  );
+  clearLoginAttempts(victim);
+  assert.equal(
+    recordLoginAttempt(victim, "203.0.113.7").ok,
+    true,
+    "a correct password clears the budget",
+  );
+  console.log("✓ login throttling is a per-email cooldown, cleared on success");
 
   await db.delete(agents).where(eq(agents.id, AGENT_ID));
   console.log("all checks passed\n");

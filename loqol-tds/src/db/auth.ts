@@ -12,7 +12,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "./index";
 import { agents } from "./schema";
-import { verifyPassword } from "./crypto";
+import { hashPassword, verifyPassword } from "./crypto";
 
 const MAX_AGE_SECONDS = 60 * 60 * 12;
 
@@ -66,6 +66,17 @@ export function csrfOk(cookie: string | undefined, header: string | null): boole
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * A real hash over a value nobody can supply, built once per process. Cheap to
+ * hold, and it keeps the miss path honest without a hardcoded digest that would
+ * drift if the KDF parameters ever change.
+ */
+let decoy: string | undefined;
+function decoyHash(): string {
+  decoy ??= hashPassword(randomBytes(32).toString("hex"));
+  return decoy;
+}
+
 export interface AgentIdentity {
   id: string;
   name: string;
@@ -82,8 +93,20 @@ export async function authenticate(
     .where(eq(agents.email, email.trim().toLowerCase()))
     .limit(1);
 
-  // Same failure for unknown email and wrong password — no account enumeration.
-  if (!row) return null;
+  /*
+   * Same failure for unknown email and wrong password — but the message is not
+   * the only oracle. Returning early on a missing row skips scrypt, so a miss
+   * answers in a few milliseconds and a hit takes the length of a hash. That
+   * gap is measurable over the network and is enough to walk a list of agent
+   * emails and learn which are registered.
+   *
+   * So a miss verifies against a throwaway hash of the same shape and discards
+   * the result. Both paths pay for one scrypt.
+   */
+  if (!row) {
+    verifyPassword(password, decoyHash());
+    return null;
+  }
   if (!verifyPassword(password, row.passwordHash)) return null;
   return { id: row.id, name: row.name, email: row.email };
 }
