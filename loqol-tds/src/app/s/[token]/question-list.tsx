@@ -18,9 +18,17 @@ interface Props {
   chapter: ChapterId;
   initialAnswers: AnswerMap;
   onSwitchToVoice?: () => void;
+  /** Hand the fresh map back so the other path never re-asks. */
+  onWrote?: (answers: AnswerMap) => void;
 }
 
-export function QuestionList({ token, chapter, initialAnswers, onSwitchToVoice }: Props) {
+export function QuestionList({
+  token,
+  chapter,
+  initialAnswers,
+  onSwitchToVoice,
+  onWrote,
+}: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [unsaved, setUnsaved] = useState(false);
 
@@ -47,9 +55,13 @@ export function QuestionList({ token, chapter, initialAnswers, onSwitchToVoice }
       const res = await fetch("/api/answers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, answers: [{ questionId, value, status, source: "form" }] }),
+        body: JSON.stringify({
+          token,
+          answers: [{ questionId, value, status, source: "form" }],
+        }),
       });
       setUnsaved(!res.ok);
+      if (res.ok) onWrote?.((await res.json()).answers);
     } catch {
       setUnsaved(true);
     }

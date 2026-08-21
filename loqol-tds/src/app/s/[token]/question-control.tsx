@@ -13,7 +13,10 @@ import type { Answer, AnswerValue, Question } from "@/tds/types";
 interface Props {
   question: Question;
   answer?: Answer;
-  onChange: (value: AnswerValue, status?: "answered" | "unknown") => void;
+  onChange: (
+    value: AnswerValue,
+    status?: "answered" | "unknown" | "skipped",
+  ) => void;
   /** Modality is a default, not a jail — every question offers the other path. */
   onVoice: () => void;
 }
@@ -156,13 +159,28 @@ export function QuestionControl({ question, answer, onChange, onVoice }: Props) 
         <p className="mt-3 text-sm text-stone-400">{question.whyWeAsk}</p>
       )}
 
-      <button
-        type="button"
-        onClick={onVoice}
-        className="mt-3 text-sm font-medium text-teal-800 underline underline-offset-4"
-      >
-        Rather say it out loud?
-      </button>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
+        <button
+          type="button"
+          onClick={onVoice}
+          className="text-sm font-medium text-teal-800 underline underline-offset-4"
+        >
+          Rather say it out loud?
+        </button>
+        {/* Nothing blocks. "Come back to it" is a promise deferredQuestions()
+            keeps by bringing this round again at the end. */}
+        <button
+          type="button"
+          onClick={() => onChange(null, "skipped")}
+          className={`text-sm underline underline-offset-4 ${
+            answer?.status === "skipped"
+              ? "font-medium text-amber-700"
+              : "text-stone-500"
+          }`}
+        >
+          {answer?.status === "skipped" ? "Saved for later" : "Come back to this"}
+        </button>
+      </div>
     </div>
   );
 }

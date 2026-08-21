@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { groupsInChapter, questionsInChapter, getQuestion } from "../src/tds/registry";
 import { firstIncompleteGroup, isPresenceChip, questionsInGroup } from "../src/tds/form-view";
-import { makeAnswer } from "../src/tds/flow";
+import { deferredQuestions, makeAnswer, nextQuestion } from "../src/tds/flow";
 import type { AnswerMap } from "../src/tds/types";
 
 const CH = "features" as const;
@@ -66,3 +66,43 @@ assert.equal(
 );
 console.log("✓ open follow-ups are collected, not skipped");
 console.log("form checks passed\n");
+
+// "Come back to this" has to mean something. A skipped question must not be
+// handed straight back, and must not be silently dropped either.
+{
+  const map: AnswerMap = {};
+  const first = nextQuestion(map).question!;
+  map[first.id] = { ...makeAnswer(first.id, null, "form"), status: "skipped" };
+
+  const after = nextQuestion(map).question!;
+  assert.notEqual(after.id, first.id, "a skipped question must not be re-asked immediately");
+
+  // answer everything else; the deferred one must then come back
+  for (let i = 0; i < 300; i++) {
+    const n = nextQuestion(map);
+    if (n.done || !n.question) break;
+    if (n.question.id === first.id) break;
+    const q = n.question;
+    map[q.id] = makeAnswer(
+      q.id,
+      q.type === "boolean" ? false
+        : q.type === "number" ? 0
+        : q.type === "enum" ? q.options![0].value
+        : q.type === "multi_enum" ? [q.options![0].value]
+        : q.type === "acknowledgement" ? true
+        : "x",
+      "form",
+    );
+  }
+  assert.equal(
+    nextQuestion(map).question?.id,
+    first.id,
+    "a skipped question must come back once nothing new is left",
+  );
+  assert.deepEqual(
+    deferredQuestions(map).map((q) => q.id),
+    [first.id],
+    "deferredQuestions must list exactly what was set aside",
+  );
+  console.log("✓ skipped questions defer to the end and do come back");
+}

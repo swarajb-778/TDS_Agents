@@ -192,16 +192,35 @@ explanations. Put that in the system prompt explicitly.
 
 ---
 
-## 5. Handoff, resume, progress
+## ✅ 5. Handoff, resume, progress — DONE
 
 **Goal:** the three seller-experience requirements that make or break this.
 
 **Acceptance**
-- [ ] Switch modality mid-chapter, no work lost, no re-asking answered questions
-- [ ] Close the tab at question 20, reopen via link, land back on 20 with
-      `resume()`'s welcome-back copy
-- [ ] Progress shows chapters and `"About N minutes left"`, never "field 87 of 150"
-- [ ] Skipped questions return at the end — "come back to it" has to mean something
+- [x] Switch modality mid-chapter, no work lost, no re-asking answered questions
+- [x] Close the tab, reopen via link, land back where you were with `resume()`'s
+      welcome-back copy
+- [x] Progress shows chapters and `"About N minutes left"`, never "field 87 of 150"
+- [x] Skipped questions return at the end — "come back to it" now means something
+
+Verified in the browser: the voice agent recorded `C.2` mid-chapter, the seller
+took the "just show me the buttons" escape, and the form rendered that answer
+already selected. `switchTo()` pulls the map back before rendering the other
+path, so neither side can re-ask something the other just answered.
+
+**Two bugs this task existed to find.**
+
+`nextQuestion()` treated `skipped` exactly like unanswered, so tapping "come
+back to this" handed the seller the same question straight back. Skipping was a
+no-op, and a broken promise is worse than no button. Deferred questions now wait
+for a second pass, once nothing new is left — asserted in `form-check.ts`.
+
+The remembered modality was loaded and then ignored, and worse, *every* routine
+form write was persisting `"form"`. Working through the form-only chapters would
+therefore opt a seller out of voice for Section C, which is exactly where voice
+earns its place. Preference is now recorded only on an explicit switch, via
+`/api/session`, and absence of a row means "never chose" rather than "chose
+form".
 
 ---
 

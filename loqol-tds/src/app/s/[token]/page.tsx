@@ -1,5 +1,6 @@
 import { loadAnswers } from "@/db/answers";
 import { resolveSellerToken } from "@/db/requests";
+import { loadPreferences } from "@/db/sessions";
 import { SellerFlow } from "./seller-flow";
 
 // Every visit reads the seller's current answers, so nothing here is cacheable.
@@ -26,13 +27,17 @@ export default async function SellerPage({
     );
   }
 
-  const answers = await loadAnswers(session.dealId);
+  const [answers, preferences] = await Promise.all([
+    loadAnswers(session.dealId),
+    loadPreferences(session.dealId),
+  ]);
 
   return (
     <SellerFlow
       token={token}
       sellerName={session.sellerName}
       initialAnswers={answers}
+      initialModality={preferences.modality}
     />
   );
 }

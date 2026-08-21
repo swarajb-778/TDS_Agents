@@ -8,7 +8,8 @@
 
 import { NextResponse } from "next/server";
 import { resolveSellerToken } from "@/db/requests";
-import { writeAnswer } from "@/db/answers";
+import { loadAnswers, writeAnswer } from "@/db/answers";
+import { loadPreferences } from "@/db/sessions";
 import type { AnswerStatus, AnswerValue, Modality } from "@/tds/types";
 
 const STATUSES: AnswerStatus[] = [
@@ -69,6 +70,23 @@ function parseBody(body: unknown): { token: string; answers: IncomingAnswer[] } 
   return { token, answers: parsed };
 }
 
+/**
+ * The current answer set. Both input paths read this, which is what makes
+ * switching between them free — there is one store and nothing to sync.
+ */
+export async function GET(request: Request) {
+  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const session = await resolveSellerToken(token);
+  if (!session) {
+    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
+  }
+  const [answers, preferences] = await Promise.all([
+    loadAnswers(session.dealId),
+    loadPreferences(session.dealId),
+  ]);
+  return NextResponse.json({ answers, modality: preferences.modality });
+}
+
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -106,5 +124,10 @@ export async function POST(request: Request) {
     if (!result.ok) rejected.push({ questionId: answer.questionId, reason: result.reason });
   }
 
-  return NextResponse.json({ ok: true, written: parsed.answers.length - rejected.length, rejected });
+  return NextResponse.json({
+    ok: true,
+    written: parsed.answers.length - rejected.length,
+    rejected,
+    answers: await loadAnswers(session.dealId),
+  });
 }

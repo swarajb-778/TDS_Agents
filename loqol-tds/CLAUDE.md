@@ -82,8 +82,14 @@ a seeded deal into a real filled, signable PDF.
 `/api/voice/session` for ephemeral tokens, `/api/voice/tool` for server-executed
 tool calls. `src/tds/voice.ts` builds the agent's brief from the registry.
 
-**Not started:** everything else. Next task is in `docs/BUILD_PLAN.md` — handoff,
-resume and progress.
+**Done:** handoff, resume and progress. `SellerFlow` derives chapter and
+modality from the answer set on every render, renders `resume()`'s welcome-back
+copy, and pulls the map back before switching path. `ProgressHeader` speaks in
+chapters and minutes. Skipping defers a question to a second pass rather than
+re-asking it.
+
+**Not started:** the agent view, conflicts in the UI, and the write-up. Next
+task is in `docs/BUILD_PLAN.md`.
 
 **Known gaps:** 4 of 144 registry fields have no slot on the supplied PDF — it
 is a paraphrased TDS, not the official C.A.R. form. Enumerated in

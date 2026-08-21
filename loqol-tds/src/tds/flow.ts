@@ -166,9 +166,21 @@ export function nextQuestion(
       };
     }
     const a = answers[q.id];
-    const needsAnswer =
-      !a || a.status === "unanswered" || a.status === "skipped";
-    if (needsAnswer) {
+    if (!a || a.status === "unanswered") {
+      return {
+        question: q,
+        chapter: q.chapter,
+        enteringChapter: q.chapter !== currentChapter,
+        done: false,
+      };
+    }
+  }
+
+  // Only now, with nothing new left, do the deferred ones come round again.
+  // Returning a skipped question immediately would make "come back to it" a
+  // lie — the seller taps it and is handed the same question straight back.
+  for (const q of queue) {
+    if (answers[q.id]?.status === "skipped") {
       return {
         question: q,
         chapter: q.chapter,

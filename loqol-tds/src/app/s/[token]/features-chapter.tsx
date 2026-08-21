@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { getChapter, groupsInChapter } from "@/tds/registry";
-import { isVisible, progress } from "@/tds/flow";
+import { isVisible } from "@/tds/flow";
 import {
   firstIncompleteGroup,
   isPresenceChip,
@@ -40,6 +40,8 @@ interface Props {
   initialAnswers: AnswerMap;
   /** Chapter finished — the flow re-derives where the seller goes next. */
   onChapterDone?: () => void;
+  /** Hand the fresh map back so the other path never re-asks. */
+  onWrote?: (answers: AnswerMap) => void;
 }
 
 export function FeaturesChapter({
@@ -47,6 +49,7 @@ export function FeaturesChapter({
   sellerName,
   initialAnswers,
   onChapterDone,
+  onWrote,
 }: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [index, setIndex] = useState(() => firstIncompleteGroup(CHAPTER, initialAnswers));
@@ -57,11 +60,6 @@ export function FeaturesChapter({
   const chapter = getChapter(CHAPTER)!;
   const done = index >= groups.length;
   const group = groups[index];
-
-  const chapterProgress = useMemo(
-    () => progress(answers).chapters.find((c) => c.chapter === CHAPTER),
-    [answers],
-  );
 
   // Gates are evaluated against the live optimistic map, so tapping "Fireplace"
   // reveals "Which rooms?" immediately rather than after a round trip.
@@ -84,6 +82,7 @@ export function FeaturesChapter({
         }),
       });
       setUnsaved(!response.ok);
+      if (response.ok) onWrote?.((await response.json()).answers);
     } catch {
       // Offline or a dropped connection. The answer stays on screen and the
       // seller keeps going — losing their place is far worse than a late write.
@@ -189,25 +188,17 @@ export function FeaturesChapter({
 
   return (
     <div className="mx-auto max-w-lg pb-40">
-      <header className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50/95 px-4 py-3 backdrop-blur">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-medium text-stone-500">{chapter.title}</p>
-          <p className="text-sm text-stone-500">
-            {index + 1} of {groups.length}
-          </p>
-        </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200">
+      <div className="px-4 pt-4">
+        <div className="h-1.5 overflow-hidden rounded-full bg-stone-200">
           <div
             className="h-full rounded-full bg-teal-700 transition-all duration-300"
-            style={{ width: `${Math.round(((index) / groups.length) * 100)}%` }}
+            style={{ width: `${Math.round((index / groups.length) * 100)}%` }}
           />
         </div>
-        {chapterProgress && (
-          <p className="mt-1.5 text-xs text-stone-400">
-            {Math.round(chapterProgress.secondsRemaining / 60) || 1} min left in this part
-          </p>
-        )}
-      </header>
+        <p className="mt-1.5 text-xs text-stone-400">
+          Room {index + 1} of {groups.length}
+        </p>
+      </div>
 
       <main className="px-4 pt-6">
         <h1 className="text-2xl font-semibold text-stone-900">{group}</h1>

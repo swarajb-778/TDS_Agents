@@ -18,11 +18,13 @@ interface Props {
   token: string;
   chapter: ChapterId;
   onSwitchToForm: (questionId: string) => void;
+  /** Voice writes land server-side; tell the flow to pull the map back. */
+  onWrote?: () => void;
 }
 
 type Status = "idle" | "connecting" | "live" | "ended" | "error";
 
-export function VoiceChapter({ token, chapter, onSwitchToForm }: Props) {
+export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [lines, setLines] = useState<Line[]>([]);
   const [recorded, setRecorded] = useState<string[]>([]);
@@ -82,7 +84,10 @@ export function VoiceChapter({ token, chapter, onSwitchToForm }: Props) {
         result = { ok: false, reason: "Could not reach the server. Ask again in a moment." };
       }
 
-      if (typeof result.recorded === "string") setRecorded((p) => [...p, result.recorded as string]);
+      if (typeof result.recorded === "string") {
+        setRecorded((p) => [...p, result.recorded as string]);
+        onWrote?.();
+      }
       if (typeof result.progress === "string") setProgressLabel(result.progress);
       if (result.ok === false && typeof result.reason === "string") {
         say("system", `Not recorded — ${result.reason}`);
@@ -105,7 +110,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm }: Props) {
 
       send({ type: "response.create" });
     },
-    [token, say, stop, onSwitchToForm],
+    [token, say, stop, onSwitchToForm, onWrote],
   );
 
   const start = useCallback(async () => {
