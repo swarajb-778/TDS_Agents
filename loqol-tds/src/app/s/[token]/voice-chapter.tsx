@@ -208,28 +208,28 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
     <div className="mx-auto max-w-lg px-4 pb-40 pt-6">
       <audio ref={audioRef} autoPlay className="hidden" />
 
-      <p className="text-sm font-medium text-stone-500">{title}</p>
-      <h1 className="mt-1 text-2xl font-semibold text-stone-900">
+      <p className="text-sm font-medium text-ink-muted">{title}</p>
+      <h1 className="mt-1 text-2xl font-semibold text-ink">
         {status === "live" ? "Go ahead — I'm listening" : "Let's talk this bit through"}
       </h1>
-      <p className="mt-2 text-stone-600">{intro}</p>
-      {progressLabel && <p className="mt-1 text-sm text-stone-400">{progressLabel}</p>}
+      <p className="mt-2 text-ink-muted">{intro}</p>
+      {progressLabel && <p className="mt-1 text-sm text-ink-faint">{progressLabel}</p>}
 
       {status === "idle" && (
         <button
           type="button"
           onClick={start}
-          className="mt-6 min-h-14 w-full rounded-xl bg-teal-700 px-5 text-base font-semibold text-white active:bg-teal-800"
+          className="mt-6 min-h-14 w-full rounded-control bg-brand px-5 text-base font-semibold text-on-brand active:bg-brand-strong"
         >
           Start talking
         </button>
       )}
       {status === "connecting" && (
-        <p className="mt-6 text-stone-500">Connecting — your browser will ask for the microphone.</p>
+        <p className="mt-6 text-ink-muted">Connecting — your browser will ask for the microphone.</p>
       )}
 
       {error && (
-        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="mt-4 rounded-control border border-attention-line bg-attention-surface p-3 text-sm text-attention">
           {error}
           <button type="button" onClick={start} className="ml-2 font-semibold underline">
             Try again
@@ -244,10 +244,10 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
               key={i}
               className={
                 line.who === "seller"
-                  ? "ml-8 rounded-2xl bg-teal-700 px-4 py-2 text-white"
+                  ? "ml-8 rounded-card bg-brand px-4 py-2 text-on-brand"
                   : line.who === "agent"
-                    ? "mr-8 rounded-2xl bg-white px-4 py-2 text-stone-800 ring-1 ring-stone-200"
-                    : "text-sm text-stone-500"
+                    ? "mr-8 rounded-card bg-surface px-4 py-2 text-ink ring-1 ring-line"
+                    : "text-sm text-ink-muted"
               }
             >
               {line.text}
@@ -258,11 +258,11 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
       )}
 
       {recorded.length > 0 && (
-        <div className="mt-6 rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-sm font-medium text-stone-500">Written down so far</p>
+        <div className="mt-6 rounded-card border border-line bg-surface p-4">
+          <p className="text-sm font-medium text-ink-muted">Written down so far</p>
           <ul className="mt-2 space-y-1">
             {recorded.map((r, i) => (
-              <li key={i} className="text-sm text-stone-700">
+              <li key={i} className="text-sm text-ink">
                 &middot; {r}
               </li>
             ))}
@@ -275,7 +275,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
         or whose connection failed, must never be stranded on a screen whose
         only control needs a microphone.
       */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white/95 px-4 py-4 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-4 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-lg gap-2">
           <button
             type="button"
@@ -284,7 +284,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
               setStatus("ended");
               onSwitchToForm("");
             }}
-            className="min-h-14 flex-1 rounded-xl border-2 border-stone-300 bg-white px-4 font-medium text-stone-700"
+            className="min-h-14 flex-1 rounded-control border-2 border-line-strong bg-surface px-4 font-medium text-ink"
           >
             Just show me the buttons
           </button>
@@ -295,7 +295,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
                 stop();
                 setStatus("ended");
               }}
-              className="min-h-14 rounded-xl border-2 border-stone-300 bg-white px-4 font-medium text-stone-700"
+              className="min-h-14 rounded-control border-2 border-line-strong bg-surface px-4 font-medium text-ink"
             >
               Pause
             </button>

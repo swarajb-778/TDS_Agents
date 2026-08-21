@@ -23,10 +23,10 @@ export function ProgressHeader({
   const title = shown[here]?.title ?? "";
 
   return (
-    <header className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50/95 px-4 py-3 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-line bg-canvas/95 px-4 py-3 backdrop-blur">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="truncate text-sm font-medium text-stone-500">{title}</p>
-        <p className="shrink-0 text-sm text-stone-500">{p.label}</p>
+        <p className="truncate text-sm font-medium text-ink-muted">{title}</p>
+        <p className="shrink-0 text-sm text-ink-muted">{p.label}</p>
       </div>
 
       {/* One segment per chapter — the seller can see the shape of what's left. */}
@@ -36,10 +36,10 @@ export function ProgressHeader({
             key={c.chapter}
             className={`h-1.5 flex-1 rounded-full ${
               c.state === "complete"
-                ? "bg-teal-700"
+                ? "bg-brand"
                 : i === here
-                  ? "bg-teal-700/40"
-                  : "bg-stone-200"
+                  ? "bg-brand/40"
+                  : "bg-surface-sunken"
             }`}
           />
         ))}

@@ -18,7 +18,7 @@ export default async function SellerPage({
     return (
       <main className="mx-auto max-w-md px-4 py-16">
         <h1 className="text-2xl font-semibold">This link has expired</h1>
-        <p className="mt-3 text-stone-600">
+        <p className="mt-3 text-ink-muted">
           Disclosure links stop working after a couple of weeks, for your
           security. Your agent can send you a fresh one — nothing you already
           answered is lost.

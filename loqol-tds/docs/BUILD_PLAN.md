@@ -227,18 +227,41 @@ form".
 
 ---
 
-## 6. Agent view
+## ✅ 6. Agent view — DONE
 
 **Goal:** the other half of the product.
 
 **Acceptance**
-- [ ] Email + password login, session cookie, CSRF on mutations
-- [ ] Create seller / deal; fill the `agentOnlyQuestions()` (county, legal
+- [x] Email + password login, session cookie, CSRF on mutations
+- [x] Create seller / deal; fill the `agentOnlyQuestions()` (county, legal
       description, substituted disclosures)
-- [ ] Send disclosure request; see status (not started / in progress / submitted)
-- [ ] Review submitted answers with the seller's `verbatim` alongside
-- [ ] `agentQueue()` — the "I don't know" and "flag for agent" list
-- [ ] Link to the filled DocuSeal form
+- [x] Send disclosure request; see status (not started / in progress / submitted)
+- [x] Review submitted answers with the seller's `verbatim` alongside
+- [x] `agentQueue()` — the "I don't know" and "flag for agent" list
+- [x] Link to the filled DocuSeal form (`npm run docuseal:fill`)
+
+**Auth.** Stateless signed cookie (HMAC over agent id + expiry with
+`AUTH_SECRET`) rather than a sessions table: there is one thing to verify and a
+table would add a round trip per request for a revocation feature nothing uses.
+`httpOnly` + `Secure` + `SameSite=Lax`. CSRF is double-submit — a second cookie
+readable by our own JS, echoed in `x-csrf-token`, which a cross-site form post
+cannot set. Unknown email and wrong password return the *same* message, so the
+form cannot be used to enumerate accounts. Verified by curl: mutation without
+the header is refused, and `/agent` unauthenticated redirects.
+
+**Three bugs this task surfaced**, each of which would have shipped:
+
+- **The login page was inside its own guard.** `/agent/login` sat under the
+  layout that redirects unauthenticated visitors to `/agent/login` — an infinite
+  redirect, and login was unreachable. Fixed with a route group so the guard
+  covers `(app)` only.
+- **Connection pool exhaustion.** Every hot reload opened a fresh Postgres pool
+  against Supabase's 15-client session pooler. The same shape hurts in
+  production, where each serverless instance opens its own. Capped at 5, idle
+  timeout, and the client is reused across reloads via `globalThis`.
+- **An N+1 on the dashboard.** `loadAnswers()` inside the deal map meant an
+  agent with fifty sellers opened a hundred round trips against a pool of five.
+  Now three bulk queries, grouped in memory.
 
 ---
 

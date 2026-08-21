@@ -73,10 +73,10 @@ export function QuestionList({
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-24 pt-6">
-      <p className="text-sm font-medium text-stone-500">{meta?.title}</p>
-      <h1 className="mt-1 text-2xl font-semibold text-stone-900">{meta?.intro}</h1>
+      <p className="text-sm font-medium text-ink-muted">{meta?.title}</p>
+      <h1 className="mt-1 text-2xl font-semibold text-ink">{meta?.intro}</h1>
       {p && (
-        <p className="mt-2 text-sm text-stone-400">
+        <p className="mt-2 text-sm text-ink-faint">
           {p.answered} of {p.total} answered
         </p>
       )}
@@ -85,14 +85,14 @@ export function QuestionList({
         <button
           type="button"
           onClick={onSwitchToVoice}
-          className="mt-4 text-sm font-medium text-teal-800 underline underline-offset-4"
+          className="mt-4 inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
         >
           Go back to talking it through
         </button>
       )}
 
       {unsaved && (
-        <p className="mt-4 text-sm text-amber-700">
+        <p className="mt-4 text-sm text-attention">
           Couldn&rsquo;t reach the server just now. Your answers are still here
           &mdash; keep going and we&rsquo;ll save them.
         </p>

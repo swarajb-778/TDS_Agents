@@ -29,9 +29,34 @@ if (url.includes("<")) {
   );
 }
 
-// prepare: false is required if this ever points at the transaction pooler
-// (port 6543), and costs nothing on the session pooler.
-export const sql = postgres(url, { prepare: false });
+/**
+ * One pool, reused.
+ *
+ * Two things bite here. Supabase's session pooler allows 15 clients total, and
+ * Next's dev server re-evaluates modules on every hot reload — so a fresh pool
+ * per reload exhausts the limit within a few edits. The same shape hurts in
+ * production, where each serverless instance opens its own pool against the
+ * same 15.
+ *
+ * So: cap it low, let idle connections go, and hang the client off globalThis
+ * so a reload reuses it instead of opening another.
+ */
+const globalForDb = globalThis as unknown as {
+  loqolSql?: ReturnType<typeof postgres>;
+};
+
+export const sql =
+  globalForDb.loqolSql ??
+  postgres(url, {
+    // prepare: false is required if this ever points at the transaction pooler
+    // (port 6543), and costs nothing on the session pooler.
+    prepare: false,
+    max: 5,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
+
+if (process.env.NODE_ENV !== "production") globalForDb.loqolSql = sql;
 
 export const db = drizzle(sql, { schema });
 

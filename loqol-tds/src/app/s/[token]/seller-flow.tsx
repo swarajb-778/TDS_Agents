@@ -100,10 +100,10 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
         <h1 className="text-2xl font-semibold">
           {state.chapterTitle ? `Welcome back, ${firstName}.` : `Hi ${firstName}.`}
         </h1>
-        <p className="mt-3 text-stone-600">{state.message}</p>
+        <p className="mt-3 text-ink-muted">{state.message}</p>
 
         {deferred.length > 0 && (
-          <p className="mt-4 rounded-xl bg-white p-3 text-sm text-stone-600 ring-1 ring-stone-200">
+          <p className="mt-4 rounded-control bg-surface p-3 text-sm text-ink-muted ring-1 ring-line">
             {deferred.length} thing{deferred.length === 1 ? "" : "s"} you asked to
             come back to {deferred.length === 1 ? "is" : "are"} still waiting —
             {deferred.length === 1 ? " it" : " they"}&rsquo;ll come round again at
@@ -114,7 +114,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
         <button
           type="button"
           onClick={() => setLanded(true)}
-          className="mt-6 min-h-14 w-full rounded-xl bg-teal-700 px-5 font-semibold text-white active:bg-teal-800"
+          className="mt-6 min-h-14 w-full rounded-control bg-brand px-5 font-semibold text-on-brand active:bg-brand-strong"
         >
           {state.chapterTitle ? "Pick up where I left off" : "Let's go"}
         </button>
@@ -126,7 +126,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
               setOverride(suggested === "voice" ? "form" : "voice");
               setLanded(true);
             }}
-            className="min-h-12 flex-1 rounded-xl border-2 border-stone-300 bg-white px-4 text-sm font-medium text-stone-700"
+            className="min-h-12 flex-1 rounded-control border-2 border-line-strong bg-surface px-4 text-sm font-medium text-ink"
           >
             {suggested === "voice" ? "I'd rather tap than talk" : "I'd rather talk it through"}
           </button>
@@ -142,7 +142,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
       <button
         type="button"
         onClick={() => setReviewing(true)}
-        className="text-sm font-medium text-teal-800 underline underline-offset-4"
+        className="inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
       >
         That&rsquo;s everything I can answer — leave the rest for my agent
       </button>

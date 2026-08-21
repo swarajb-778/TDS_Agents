@@ -24,9 +24,9 @@ interface Props {
 }
 
 const CHOICE =
-  "min-h-12 flex-1 rounded-xl border-2 px-4 text-base font-medium transition-colors";
-const ON = "border-teal-700 bg-teal-700 text-white";
-const OFF = "border-stone-300 bg-white text-stone-700 active:bg-stone-100";
+  "min-h-12 flex-1 rounded-control border-2 px-4 text-base font-medium transition-colors";
+const ON = "border-brand bg-brand text-on-brand";
+const OFF = "border-line-strong bg-surface text-ink active:bg-surface-sunken";
 
 export function QuestionControl({
   question,
@@ -39,12 +39,12 @@ export function QuestionControl({
   const value = unsure ? null : answer?.value;
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-      <p className="text-base font-medium text-stone-900">
+    <div className="rounded-card border border-line bg-surface p-4">
+      <p className="text-base font-medium text-ink">
         {question.sellerLabel ?? question.label}
       </p>
       {question.plainEnglish && (
-        <p className="mt-1 text-sm text-stone-500">{question.plainEnglish}</p>
+        <p className="mt-1 text-sm text-ink-muted">{question.plainEnglish}</p>
       )}
 
       <div className="mt-3">
@@ -135,7 +135,7 @@ export function QuestionControl({
                 </button>
               )}
             </div>
-            <p className="mt-2 text-sm text-stone-500">Pick as many as apply.</p>
+            <p className="mt-2 text-sm text-ink-muted">Pick as many as apply.</p>
           </>
         )}
 
@@ -145,7 +145,7 @@ export function QuestionControl({
             defaultValue={typeof value === "string" ? value : ""}
             onBlur={(e) => onChange(e.target.value)}
             placeholder={question.examples?.[0] ?? ""}
-            className="min-h-12 w-full rounded-xl border-2 border-stone-300 bg-white px-4 text-base focus:border-teal-700 focus:outline-none"
+            className="min-h-12 w-full rounded-control border-2 border-line-strong bg-surface px-4 text-base focus:border-brand focus:outline-none"
           />
         )}
 
@@ -158,7 +158,7 @@ export function QuestionControl({
             onBlur={(e) =>
               onChange(e.target.value === "" ? null : Number(e.target.value))
             }
-            className="min-h-12 w-32 rounded-xl border-2 border-stone-300 bg-white px-4 text-base focus:border-teal-700 focus:outline-none"
+            className="min-h-12 w-32 rounded-control border-2 border-line-strong bg-surface px-4 text-base focus:border-brand focus:outline-none"
           />
         )}
       </div>
@@ -170,21 +170,21 @@ export function QuestionControl({
       {notes.map((note) => (
         <p
           key={note}
-          className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          className="mt-3 rounded-control bg-attention-surface px-3 py-2 text-sm text-attention"
         >
           {note}
         </p>
       ))}
 
       {question.whyWeAsk && (
-        <p className="mt-3 text-sm text-stone-400">{question.whyWeAsk}</p>
+        <p className="mt-3 text-sm text-ink-faint">{question.whyWeAsk}</p>
       )}
 
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
         <button
           type="button"
           onClick={onVoice}
-          className="text-sm font-medium text-teal-800 underline underline-offset-4"
+          className="inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
         >
           Rather say it out loud?
         </button>
@@ -193,10 +193,10 @@ export function QuestionControl({
         <button
           type="button"
           onClick={() => onChange(null, "skipped")}
-          className={`text-sm underline underline-offset-4 ${
+          className={`inline-flex min-h-11 items-center py-3 -my-2 text-sm underline underline-offset-4 ${
             answer?.status === "skipped"
-              ? "font-medium text-amber-700"
-              : "text-stone-500"
+              ? "font-medium text-attention"
+              : "text-ink-muted"
           }`}
         >
           {answer?.status === "skipped" ? "Saved for later" : "Come back to this"}

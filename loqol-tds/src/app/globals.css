@@ -1,19 +1,138 @@
 @import "tailwindcss";
 
 /*
- * A stressed person on a phone at 10pm. Big targets, high contrast, nothing
- * that needs a steady hand.
+ * DESIGN TOKENS
+ *
+ * Style: "Accessible & Ethical" — the profile for government, healthcare and
+ * legal-compliance products. High contrast, 16px+ body, visible focus, 44px
+ * touch targets, motion that can be turned off.
+ *
+ * That is not a stylistic preference here. One surface is a stressed,
+ * non-technical person completing a legal document on a phone at 10pm; the
+ * other is a professional reviewing what they submitted. Neither is helped by
+ * anything fashionable.
+ *
+ * Semantic tokens only — components never write a raw hex.
  */
+
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces */
+  --color-canvas: #f6f6f4;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eeeeea;
+  --color-line: #d9d8d2;
+  /* 3.4:1 on surface — WCAG 1.4.11 for non-text UI like input borders. */
+  --color-line-strong: #8d8b81;
+
+  /* Text — 4.5:1 minimum on canvas, 7:1 for body */
+  --color-ink: #1c1c1a;
+  --color-ink-muted: #5c5b55;
+  --color-ink-faint: #6d6c63;
+
+  /*
+   * Primary is a deep teal rather than the usual product blue: calmer, and it
+   * leaves the entire warm half of the spectrum free to mean one thing only.
+   */
+  --color-brand: #0d6b62;
+  --color-brand-strong: #095049;
+  --color-brand-tint: #e6f2f0;
+  --color-on-brand: #ffffff;
+
+  /*
+   * Warm colours are reserved. Amber means "two of your answers disagree,
+   * have a look" and nothing else — never a call to action, never decoration.
+   * If amber also meant "submit", the one signal that matters would be noise.
+   */
+  --color-attention: #8a5a00;
+  --color-attention-surface: #fdf5e3;
+  --color-attention-line: #e8c97a;
+
+  --color-danger: #a3261d;
+  --color-danger-surface: #fceceb;
+
+  --color-positive: #1d6b3f;
+  --color-positive-surface: #e8f4ec;
+
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+}
+
+/*
+ * Dark mode is not a nicety for this product. The brief's seller is doing this
+ * "at 10pm after work" — a phone at full brightness in a dark room is the
+ * actual usage context, so both themes are designed, not inverted.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #16171a;
+    --color-surface: #1f2125;
+    --color-surface-sunken: #101114;
+    --color-line: #33363c;
+    /* 3.7:1 on the dark surface. Borders must survive both themes. */
+    --color-line-strong: #747983;
+
+    --color-ink: #f2f2ef;
+    --color-ink-muted: #b2b4b0;
+    --color-ink-faint: #8e918c;
+
+    /* Desaturated and lifted, not the light-mode value on a dark ground. */
+    --color-brand: #4fbfae;
+    --color-brand-strong: #6fd3c3;
+    --color-brand-tint: #16302e;
+    --color-on-brand: #08211f;
+
+    --color-attention: #f0c674;
+    --color-attention-surface: #2e2617;
+    --color-attention-line: #6b5526;
+
+    --color-danger: #f08b82;
+    --color-danger-surface: #33201e;
+
+    --color-positive: #77c795;
+    --color-positive-surface: #172a1e;
+  }
 }
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
-/* Never let a mis-tap select text instead of pressing the control. */
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/*
+ * A visible focus ring on everything reachable by keyboard. Never removed —
+ * on a legal form, a keyboard user losing their place is a correctness problem,
+ * not an aesthetic one.
+ */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+}
+
+/* Data columns must not jitter as values change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

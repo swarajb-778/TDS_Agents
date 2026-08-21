@@ -66,7 +66,7 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
       <h1 className="text-2xl font-semibold">
         Nearly there, {sellerName.split(" ")[0]}.
       </h1>
-      <p className="mt-3 text-stone-600">
+      <p className="mt-3 text-ink-muted">
         {open.length === 0
           ? "Nothing looks contradictory. Have a last look, then it goes to your agent."
           : `A few answers don't quite line up. Have a look — you might well be right about both.`}
@@ -75,13 +75,13 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
       {open.map((c) => (
         <section
           key={c.ruleId}
-          className={`mt-5 rounded-2xl border p-4 ${
+          className={`mt-5 rounded-card border p-4 ${
             c.severity === "hard"
-              ? "border-amber-300 bg-amber-50"
-              : "border-stone-200 bg-white"
+              ? "border-attention-line bg-attention-surface"
+              : "border-line bg-surface"
           }`}
         >
-          <p className="text-base text-stone-900">{c.message}</p>
+          <p className="text-base text-ink">{c.message}</p>
 
           {/* Both answers, quoted back in their own words. */}
           <dl className="mt-3 space-y-2">
@@ -89,13 +89,13 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
               const s = describeAnswer(id, answers);
               if (!s) return null;
               return (
-                <div key={id} className="rounded-xl bg-white/70 px-3 py-2">
-                  <dt className="text-sm text-stone-500">{s.label}</dt>
-                  <dd className="text-base font-medium text-stone-900">
+                <div key={id} className="rounded-control bg-surface/70 px-3 py-2">
+                  <dt className="text-sm text-ink-muted">{s.label}</dt>
+                  <dd className="text-base font-medium text-ink">
                     You said: {s.value}
                   </dd>
                   {s.verbatim && (
-                    <dd className="mt-1 text-sm italic text-stone-500">
+                    <dd className="mt-1 text-sm italic text-ink-muted">
                       &ldquo;{s.verbatim}&rdquo;
                     </dd>
                   )}
@@ -108,7 +108,7 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
             <button
               type="button"
               onClick={onRevisit}
-              className="min-h-12 flex-1 rounded-xl bg-teal-700 px-4 font-medium text-white active:bg-teal-800"
+              className="min-h-12 flex-1 rounded-control bg-brand px-4 font-medium text-on-brand active:bg-brand-strong"
             >
               Change an answer
             </button>
@@ -116,7 +116,7 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
               type="button"
               disabled={busy === c.ruleId}
               onClick={() => setAcknowledged(c.ruleId, false)}
-              className="min-h-12 flex-1 rounded-xl border-2 border-stone-300 bg-white px-4 font-medium text-stone-700 disabled:opacity-50"
+              className="min-h-12 flex-1 rounded-control border-2 border-line-strong bg-surface px-4 font-medium text-ink disabled:opacity-50"
             >
               Both are right
             </button>
@@ -126,17 +126,17 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
 
       {settled.length > 0 && (
         <section className="mt-6">
-          <p className="text-sm font-medium text-stone-500">
+          <p className="text-sm font-medium text-ink-muted">
             You said these are both right
           </p>
           <ul className="mt-2 space-y-2">
             {settled.map((c) => (
-              <li key={c.ruleId} className="text-sm text-stone-600">
+              <li key={c.ruleId} className="text-sm text-ink-muted">
                 &middot; {c.message.split(".")[0]}.{" "}
                 <button
                   type="button"
                   onClick={() => setAcknowledged(c.ruleId, true)}
-                  className="font-medium text-teal-800 underline underline-offset-4"
+                  className="inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
                 >
                   Look again
                 </button>
@@ -147,25 +147,25 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
       )}
 
       {(deferred.length > 0 || forAgent.length > 0) && (
-        <section className="mt-6 rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-sm font-medium text-stone-500">
+        <section className="mt-6 rounded-card border border-line bg-surface p-4">
+          <p className="text-sm font-medium text-ink-muted">
             Going to your agent
           </p>
           <ul className="mt-2 space-y-1">
             {[...deferred, ...forAgent].map((q) => (
-              <li key={q.id} className="text-sm text-stone-700">
+              <li key={q.id} className="text-sm text-ink">
                 &middot; {q.sellerLabel ?? q.label}
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-sm text-stone-500">
+          <p className="mt-3 text-sm text-ink-muted">
             These are normal. Your agent will go through them with you rather
             than leave them blank.
           </p>
           <button
             type="button"
             onClick={onRevisit}
-            className="mt-3 text-sm font-medium text-teal-800 underline underline-offset-4"
+            className="mt-3 inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
           >
             Actually, let me have another go at these
           </button>
@@ -174,11 +174,11 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
 
       <button
         type="button"
-        className="mt-8 min-h-14 w-full rounded-xl bg-teal-700 px-5 font-semibold text-white active:bg-teal-800"
+        className="mt-8 min-h-14 w-full rounded-control bg-brand px-5 font-semibold text-on-brand active:bg-brand-strong"
       >
         Send to my agent
       </button>
-      <p className="mt-2 text-center text-sm text-stone-500">
+      <p className="mt-2 text-center text-sm text-ink-muted">
         You&rsquo;ll get the form to sign once they&rsquo;ve looked it over.
       </p>
     </main>

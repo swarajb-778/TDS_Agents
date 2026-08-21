@@ -134,25 +134,25 @@ export function FeaturesChapter({
 
         {stillOpen.length === 0 ? (
           <>
-            <p className="mt-3 text-stone-600">
+            <p className="mt-3 text-ink-muted">
               You&rsquo;ve been through everything in the home. Next comes a short
               conversation about anything that isn&rsquo;t working properly.
             </p>
             <button
               type="button"
               onClick={() => onChapterDone?.()}
-              className="mt-5 min-h-14 w-full rounded-xl bg-teal-700 px-5 font-semibold text-white active:bg-teal-800"
+              className="mt-5 min-h-14 w-full rounded-control bg-brand px-5 font-semibold text-on-brand active:bg-brand-strong"
             >
               Keep going
             </button>
           </>
         ) : (
           <>
-            <p className="mt-3 text-stone-600">
+            <p className="mt-3 text-ink-muted">
               {stillOpen.length} thing{stillOpen.length === 1 ? "" : "s"} you
               said you&rsquo;d come back to:
             </p>
-            <ul className="mt-3 space-y-1 text-stone-600">
+            <ul className="mt-3 space-y-1 text-ink-muted">
               {stillOpen.map((q) => (
                 <li key={q.id} className="text-sm">
                   &middot; {q.sellerLabel ?? q.label}
@@ -163,12 +163,12 @@ export function FeaturesChapter({
               <button
                 type="button"
                 onClick={() => setIndex(firstOpen)}
-                className="mt-5 min-h-14 w-full rounded-xl bg-teal-700 px-5 font-semibold text-white active:bg-teal-800"
+                className="mt-5 min-h-14 w-full rounded-control bg-brand px-5 font-semibold text-on-brand active:bg-brand-strong"
               >
                 Finish these off
               </button>
             )}
-            <p className="mt-4 text-sm text-stone-500">
+            <p className="mt-4 text-sm text-ink-muted">
               Or leave them &mdash; they&rsquo;ll go to your agent to sort out
               with you.
             </p>
@@ -178,7 +178,7 @@ export function FeaturesChapter({
         <button
           type="button"
           onClick={() => setIndex(groups.length - 1)}
-          className="mt-6 min-h-12 rounded-xl border-2 border-stone-300 bg-white px-5 font-medium"
+          className="mt-6 min-h-12 rounded-control border-2 border-line-strong bg-surface px-5 font-medium"
         >
           Go back and change something
         </button>
@@ -189,20 +189,20 @@ export function FeaturesChapter({
   return (
     <div className="mx-auto max-w-lg pb-40">
       <div className="px-4 pt-4">
-        <div className="h-1.5 overflow-hidden rounded-full bg-stone-200">
+        <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken">
           <div
-            className="h-full rounded-full bg-teal-700 transition-all duration-300"
+            className="h-full rounded-full bg-brand transition-all duration-300"
             style={{ width: `${Math.round((index / groups.length) * 100)}%` }}
           />
         </div>
-        <p className="mt-1.5 text-xs text-stone-400">
+        <p className="mt-1.5 text-xs text-ink-faint">
           Room {index + 1} of {groups.length}
         </p>
       </div>
 
       <main className="px-4 pt-6">
-        <h1 className="text-2xl font-semibold text-stone-900">{group}</h1>
-        <p className="mt-1 text-stone-600">Tap everything your home has.</p>
+        <h1 className="text-2xl font-semibold text-ink">{group}</h1>
+        <p className="mt-1 text-ink-muted">Tap everything your home has.</p>
 
         {chips.length > 0 && (
           <div className="mt-5 flex flex-wrap gap-2">
@@ -216,8 +216,8 @@ export function FeaturesChapter({
                   aria-pressed={on}
                   className={`min-h-12 rounded-full border-2 px-4 text-base font-medium transition-colors ${
                     on
-                      ? "border-teal-700 bg-teal-700 text-white"
-                      : "border-stone-300 bg-white text-stone-700 active:bg-stone-100"
+                      ? "border-brand bg-brand text-on-brand"
+                      : "border-line-strong bg-surface text-ink active:bg-surface-sunken"
                   }`}
                 >
                   {on && <span aria-hidden="true">✓ </span>}
@@ -245,28 +245,28 @@ export function FeaturesChapter({
         <button
           type="button"
           onClick={() => setVoiceNote(true)}
-          className="mt-6 text-sm font-medium text-teal-800 underline underline-offset-4"
+          className="mt-6 inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
         >
           Not sure about any of these? Talk it through instead
         </button>
         {voiceNote && (
-          <p className="mt-2 text-sm text-stone-500">
+          <p className="mt-2 text-sm text-ink-muted">
             Voice answering is the next thing being built — for now, anything you
             skip goes to your agent.
           </p>
         )}
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white/95 px-4 py-4 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-4 py-4 backdrop-blur">
         <div className="mx-auto max-w-lg">
           {unsaved && (
-            <p className="mb-2 text-sm text-amber-700">
+            <p className="mb-2 text-sm text-attention">
               Couldn&rsquo;t reach the server just now. Your answers are still
               here — keep going and we&rsquo;ll save them.
             </p>
           )}
           {openControls.length > 0 && (
-            <p className="mb-2 text-sm text-stone-500">
+            <p className="mb-2 text-sm text-ink-muted">
               {openControls.length} follow-up
               {openControls.length === 1 ? "" : "s"} still open — you can come
               back to {openControls.length === 1 ? "it" : "them"}.
@@ -277,7 +277,7 @@ export function FeaturesChapter({
               <button
                 type="button"
                 onClick={() => setIndex((i) => i - 1)}
-                className="min-h-14 rounded-xl border-2 border-stone-300 bg-white px-5 font-medium text-stone-700"
+                className="min-h-14 rounded-control border-2 border-line-strong bg-surface px-5 font-medium text-ink"
               >
                 Back
               </button>
@@ -285,7 +285,7 @@ export function FeaturesChapter({
             <button
               type="button"
               onClick={confirmGroup}
-              className="min-h-14 flex-1 rounded-xl bg-teal-700 px-5 text-base font-semibold text-white active:bg-teal-800"
+              className="min-h-14 flex-1 rounded-control bg-brand px-5 text-base font-semibold text-on-brand active:bg-brand-strong"
             >
               That&rsquo;s everything here
             </button>

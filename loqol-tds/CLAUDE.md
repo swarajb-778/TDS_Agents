@@ -96,7 +96,15 @@ lets the seller stand by both. Acknowledgements persist in
 **Done:** the write-up — `docs/DECISIONS.md`, with `README.md` rewritten to
 point at it.
 
-**Not started:** the agent view. Next task is in `docs/BUILD_PLAN.md`.
+**Done:** the agent view — `src/app/agent/`, signed-cookie auth with CSRF on
+mutations, deal list with derived status, and a review screen showing every
+answer with its source and the seller's verbatim.
+
+**Done:** the design system — semantic tokens in `globals.css` for both light
+and dark, shared primitives in `src/app/ui.tsx`, and `npm run contrast:check`
+asserting every token pair against WCAG in both themes.
+
+**All eight tasks in `docs/BUILD_PLAN.md` are complete.**
 
 **Known gaps:** 4 of 144 registry fields have no slot on the supplied PDF — it
 is a paraphrased TDS, not the official C.A.R. form. Enumerated in
