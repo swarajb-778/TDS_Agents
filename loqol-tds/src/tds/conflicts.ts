@@ -24,6 +24,7 @@
  */
 
 import type { AnswerMap, AnswerValue, ConflictRule, DetectedConflict } from "./types";
+import { composedText } from "./docuseal";
 
 // ---------------------------------------------------------------------------
 // Small readers
@@ -43,6 +44,16 @@ const blank = (a: AnswerMap, id: string) => {
   const v = val(a, id);
   return v === null || v === "" || v === undefined;
 };
+/**
+ * Will the shared explain box print empty?
+ *
+ * Not the same question as "is this answer blank". A composed box is filled by
+ * the per-question explanations unless the seller has stored their own text, so
+ * asking the answer alone would fire this rule at every seller who explained
+ * each component in context and never retyped it into the summary.
+ */
+const composedBlank = (a: AnswerMap, id: string) =>
+  composedText(id, a).value.trim() === "";
 
 // ---------------------------------------------------------------------------
 // Rules
@@ -154,7 +165,7 @@ export const CONFLICT_RULES: ConflictRule[] = [
     id: "b_yes_no_explanation",
     severity: "hard",
     involves: ["B.gate", "B.explain"],
-    detect: (a) => isTrue(a, "B.gate") && blank(a, "B.explain"),
+    detect: (a) => isTrue(a, "B.gate") && composedBlank(a, "B.explain"),
     message: () =>
       "The explanation for the building problems is still empty. This is the part buyers actually read — a couple of sentences is enough.",
   },

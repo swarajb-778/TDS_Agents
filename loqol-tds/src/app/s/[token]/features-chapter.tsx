@@ -235,6 +235,7 @@ export function FeaturesChapter({
                 key={q.id}
                 question={q}
                 answer={answers[q.id]}
+                answers={answers}
                 onChange={(value, status) => record(q.id, value, status ?? "answered")}
                 onVoice={() => setVoiceNote(true)}
               />

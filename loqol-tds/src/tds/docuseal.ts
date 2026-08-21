@@ -95,6 +95,16 @@ function text(v: AnswerValue): string {
  * separately so the seller answers each in context; here we merge them back,
  * numbered, so a buyer's agent can tell which explanation belongs to which
  * question. That numbering is the whole reason for the round trip.
+ *
+ * This is the ONLY place that knows the numbering format. The seller now reads
+ * this exact string on screen before signing, so the format is seller-facing
+ * copy as much as it is PDF output — one implementation, or the two drift.
+ *
+ * The number is the question's own id suffix, which only reads as a number when
+ * there is a numbered list to point back at (`C.7` -> "7."). A box fed by a
+ * single non-numbered question (`B.components`, `A.not_operating`) gets no
+ * prefix: there is nothing for "components." to disambiguate, and on screen it
+ * reads as a typo.
  */
 export function composeExplanations(
   answers: AnswerMap,
@@ -107,14 +117,81 @@ export function composeExplanations(
     const body = String(e.value ?? "").trim();
     if (!body) continue;
     const n = pid.includes(".") ? pid.split(".")[1] : pid;
-    parts.push(`${n}. ${body}`);
+    parts.push(/^\d+$/.test(n) ? `${n}. ${body}` : body);
   }
   return parts.join("  ");
 }
 
-/** Parent question ids whose follow-ups compose into a given shared field. */
-function sourcesFor(field: string): string[] {
-  return QUESTIONS.filter((q) => q.followUp?.into === field).map((q) => q.id);
+/**
+ * Parent question ids whose follow-ups compose into a given shared box.
+ *
+ * Derived from the registry's `followUp.into`, never a hand-kept list — adding
+ * a seventeenth awareness question feeds the box with no change here.
+ */
+export function explanationSources(composedQuestionId: string): string[] {
+  return QUESTIONS.filter((q) => q.followUp?.into === composedQuestionId).map(
+    (q) => q.id,
+  );
+}
+
+/** What a composed box currently holds, and where that text came from. */
+export interface ComposedText {
+  /** The draft assembled from the seller's per-question explanations. */
+  composed: string;
+  /** What actually goes on the form. */
+  value: string;
+  /**
+   * True when `value` is the seller's own text rather than the assembly —
+   * either because they rewrote it or because they read the draft and
+   * confirmed it, which stores it verbatim.
+   */
+  edited: boolean;
+  /**
+   * True when the assembly has moved on since the seller stored their version,
+   * i.e. they changed an earlier answer afterwards. Surfaced to the seller as a
+   * choice; never resolved for them.
+   */
+  stale: boolean;
+  /** Parent question ids feeding the assembly. */
+  sources: string[];
+}
+
+/**
+ * PRECEDENCE: what the seller last saw and approved is what goes on the form.
+ *
+ * The assembly is a draft. It fills the box while the seller has nothing stored
+ * against the composed question, which is also what lets a later edit to an
+ * individual explanation flow straight through. The moment they confirm or
+ * change the text, that exact string is stored and it wins from then on —
+ * recomposition never writes over it, not on the next render and not at PDF
+ * time. They sign this under penalty of perjury; the text on the page has to be
+ * the text they read.
+ *
+ * That includes clearing it. An empty stored value is a deliberate act on the
+ * exact words that print, so it stands, and the missing-explanation conflict
+ * rules pick it up at review rather than this function quietly refilling it.
+ *
+ * When the draft moves on afterwards, `stale` says so and the seller is offered
+ * the newer draft. Taking it is their tap, not ours.
+ */
+export function composedText(
+  composedQuestionId: string,
+  answers: AnswerMap,
+): ComposedText {
+  const sources = explanationSources(composedQuestionId);
+  const composed = composeExplanations(answers, sources);
+
+  const stored = answers[composedQuestionId];
+  const hasStored = stored?.status === "answered";
+  const value = hasStored ? String(stored.value ?? "") : composed;
+
+  return {
+    composed,
+    value,
+    edited: hasStored,
+    stale: hasStored && value.trim() !== composed.trim(),
+    sources,
+  };
 }
 
 /**
@@ -166,13 +243,10 @@ export function toFieldValues(answers: AnswerMap): FieldValues {
       }
 
       case "composed": {
-        const sources = sourcesFor(q.id);
-        // A composed box can also be edited directly by the seller at review.
-        // If they touched it, their text wins over the machine-assembled one.
-        const edited =
-          a?.status === "answered" ? String(a.value ?? "").trim() : "";
-        const composed = composeExplanations(answers, sources);
-        const value = edited || composed;
+        // Precedence lives in composedText(), so the string the seller read on
+        // the review screen and the string that lands in the PDF are resolved
+        // by the same function. See the comment there.
+        const value = composedText(q.id, answers).value.trim();
         if (value) out[m.field] = value;
         break;
       }

@@ -3,9 +3,16 @@
  */
 
 import assert from "node:assert/strict";
-import { groupsInChapter, questionsInChapter, getQuestion } from "../src/tds/registry";
+import { QUESTIONS, groupsInChapter, questionsInChapter, getQuestion } from "../src/tds/registry";
 import { firstIncompleteGroup, isPresenceChip, questionsInGroup } from "../src/tds/form-view";
 import { deferredQuestions, inDeferralPass, makeAnswer, nextQuestion } from "../src/tds/flow";
+import {
+  composeExplanations,
+  composedText,
+  explanationSources,
+  toFieldValues,
+} from "../src/tds/docuseal";
+import { detectConflicts } from "../src/tds/conflicts";
 import type { AnswerMap } from "../src/tds/types";
 
 const CH = "features" as const;
@@ -139,3 +146,177 @@ console.log("form checks passed\n");
   );
   console.log("✓ deferral pass is detectable, so it can offer a way out");
 }
+
+// ---------------------------------------------------------------------------
+// Composed explain boxes.
+//
+// The seller is shown "here's everything you told me" over these, so what the
+// screen renders and what the PDF prints have to be the same string, produced
+// by the same function. These assertions are the contract between the two.
+// ---------------------------------------------------------------------------
+
+// The sources are derived from the registry's followUp.into, never a hand-kept
+// list of C.1-C.16. If someone adds a seventeenth, this picks it up for free.
+{
+  for (const q of QUESTIONS) {
+    if (q.docuseal.kind !== "composed") continue;
+    const sources = explanationSources(q.id);
+    assert.ok(
+      sources.length > 0,
+      `${q.id} composes from nothing — its followUp.into targets are misspelled`,
+    );
+    for (const pid of sources) {
+      assert.equal(
+        getQuestion(pid)?.followUp?.into,
+        q.id,
+        `${pid} must declare ${q.id} as its follow-up target`,
+      );
+    }
+  }
+  const cSources = explanationSources("C.explain");
+  assert.equal(cSources.length, 16, `expected 16 awareness sources, got ${cSources.length}`);
+  console.log(`\n✓ composed sources derive from the registry (C.explain <- ${cSources.length})`);
+}
+
+/** Two awareness yeses, each explained in context, as voice would leave them. */
+function twoExplained(): AnswerMap {
+  const a: AnswerMap = {};
+  a["C.7"] = makeAnswer("C.7", true, "voice");
+  a["C.7.explanation"] = makeAnswer(
+    "C.7.explanation",
+    "The back patio settled about an inch in 2019.",
+    "voice",
+  );
+  a["C.13"] = makeAnswer("C.13", true, "voice");
+  a["C.13.explanation"] = makeAnswer(
+    "C.13.explanation",
+    "Foothill Terrace HOA, dues are $180 a month.",
+    "voice",
+  );
+  return a;
+}
+
+// Composition produces the numbered narrative, and the seller sees the very
+// string the PDF gets — not an empty box.
+{
+  const a = twoExplained();
+  const expected =
+    "7. The back patio settled about an inch in 2019.  " +
+    "13. Foothill Terrace HOA, dues are $180 a month.";
+
+  assert.equal(composedText("C.explain", a).composed, expected);
+  assert.equal(
+    composedText("C.explain", a).value,
+    expected,
+    "with nothing stored, the box the seller reads is the assembled draft",
+  );
+  assert.equal(toFieldValues(a)["c_explain"], expected, "and that is what prints");
+  assert.equal(composedText("C.explain", a).edited, false);
+  assert.equal(composedText("C.explain", a).stale, false);
+
+  // Numbering belongs to composeExplanations and nowhere else.
+  assert.equal(composeExplanations(a, explanationSources("C.explain")), expected);
+
+  // Order follows the registry, not the order the seller happened to answer in.
+  const backwards: AnswerMap = {};
+  backwards["C.13"] = a["C.13"];
+  backwards["C.13.explanation"] = a["C.13.explanation"];
+  backwards["C.7"] = a["C.7"];
+  backwards["C.7.explanation"] = a["C.7.explanation"];
+  assert.equal(composedText("C.explain", backwards).value, expected, "numbering must stay in order");
+
+  console.log("✓ composition numbers the seller's own explanations, in registry order");
+}
+
+// A box fed by one un-numbered question must not print "components. ...".
+{
+  const a: AnswerMap = {};
+  a["B.gate"] = makeAnswer("B.gate", true, "voice");
+  a["B.components"] = makeAnswer("B.components", ["roof"], "form");
+  a["B.components.explanation"] = makeAnswer(
+    "B.components.explanation",
+    "The roof leaks over the garage when it rains hard.",
+    "voice",
+  );
+  assert.equal(
+    composedText("B.explain", a).value,
+    "The roof leaks over the garage when it rains hard.",
+    "a single un-numbered source gets no number prefix",
+  );
+  // And the "explanation is still empty" nudge must not fire at someone who
+  // explained it in context — the box is not blank, it is composed.
+  assert.equal(
+    detectConflicts(a).some((c) => c.ruleId === "b_yes_no_explanation"),
+    false,
+    "a composed explanation must count as an explanation",
+  );
+  console.log("✓ un-numbered sources compose cleanly and satisfy the explain-is-empty rule");
+}
+
+// The seller's own edit wins, and recomposition never writes over it.
+{
+  const a = twoExplained();
+  const mine = "The patio dipped after the 2019 storms. We had it looked at and it has not moved since.";
+  a["C.explain"] = makeAnswer("C.explain", mine, "form");
+
+  const after = composedText("C.explain", a);
+  assert.equal(after.value, mine, "the stored edit is what the seller sees");
+  assert.equal(after.edited, true);
+  assert.equal(toFieldValues(a)["c_explain"], mine, "and the stored edit is what prints");
+
+  // A later answer changes the draft. The edit still stands; the difference is
+  // surfaced as `stale` so the seller can be offered a choice, never overruled.
+  a["C.9"] = makeAnswer("C.9", true, "voice");
+  a["C.9.explanation"] = makeAnswer("C.9.explanation", "A neighbor's fence crosses the line.", "voice");
+
+  const later = composedText("C.explain", a);
+  assert.equal(later.value, mine, "recomposition must not overwrite the seller's text");
+  assert.equal(toFieldValues(a)["c_explain"], mine);
+  assert.equal(later.stale, true, "but the seller must be told the draft moved on");
+  assert.ok(
+    later.composed.includes("9. A neighbor's fence crosses the line."),
+    "and the newer draft must be available to offer them",
+  );
+
+  // Clearing the box is an edit too. Refilling it would be auto-correcting an
+  // answer they deliberately removed.
+  a["C.explain"] = makeAnswer("C.explain", "", "form");
+  assert.equal(composedText("C.explain", a).value, "", "an emptied box stays empty");
+  assert.equal(
+    "c_explain" in toFieldValues(a),
+    false,
+    "an emptied box must not be silently recomposed onto the PDF",
+  );
+
+  console.log("✓ the seller's edit persists, survives recomposition, and can be cleared");
+}
+
+// Nothing to compose: no yes answers, so there is nothing to read over.
+{
+  const a: AnswerMap = {};
+  for (const pid of explanationSources("C.explain")) {
+    a[pid] = makeAnswer(pid, false, "voice");
+  }
+  const empty = composedText("C.explain", a);
+  assert.equal(empty.composed, "", "nothing answered yes, so nothing composes");
+  assert.equal(empty.value, "");
+  assert.equal(empty.edited, false, "an empty draft is not an edit");
+  assert.equal(empty.stale, false);
+  assert.equal("c_explain" in toFieldValues(a), false, "an empty box leaves the PDF field alone");
+
+  // A yes with no explanation yet also composes to nothing — the box has to
+  // admit that rather than show a blank under "here's everything you told me".
+  a["C.7"] = makeAnswer("C.7", true, "voice");
+  assert.equal(composedText("C.explain", a).composed, "", "a yes with no words yet composes to nothing");
+
+  // The seller can still put something there of their own accord.
+  a["C.explain"] = makeAnswer("C.explain", "Nothing to add.", "form");
+  const own = composedText("C.explain", a);
+  assert.equal(own.value, "Nothing to add.");
+  assert.equal(own.edited, true);
+  assert.equal(toFieldValues(a)["c_explain"], "Nothing to add.");
+
+  console.log("✓ the empty case composes to nothing and stays out of the PDF");
+}
+
+console.log("composed-explanation checks passed\n");
