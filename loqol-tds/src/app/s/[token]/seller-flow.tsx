@@ -50,7 +50,15 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
     if (updated) setAnswers(updated);
   }, []);
 
-  /** Voice writes happen server-side; pull the map back after each one. */
+  /**
+   * Voice writes happen server-side; pull the map back before rendering
+   * anything that derives from them.
+   *
+   * Note when this is *not* called: not after every voice answer. Both `chapter`
+   * and `modality` below are derived from `answers`, so refreshing mid-
+   * conversation can change which branch renders and unmount a live call. Voice
+   * pulls once, when its chapter is done or the seller leaves it.
+   */
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/answers?token=${encodeURIComponent(token)}`);
@@ -171,7 +179,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
         key={`voice-${chapter}`}
         token={token}
         chapter={chapter}
-        onWrote={() => void refresh()}
+        onAdvance={() => void refresh()}
         onSwitchToForm={() => void switchTo("form")}
       />
     );

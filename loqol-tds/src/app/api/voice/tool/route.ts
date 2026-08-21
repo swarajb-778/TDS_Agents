@@ -21,6 +21,14 @@ interface ToolResult {
   /** What to ask next. The agent follows this rather than choosing. */
   next_question_id?: string | null;
   next_prompt?: string | null;
+  /** Which chapter that question belongs to, and whether it is a new one. */
+  next_chapter?: string | null;
+  /**
+   * True when the next question sits outside the chapter being talked through.
+   * The client shows an explicit way onward rather than trusting the agent to
+   * announce it — and the agent has no brief for the next chapter anyway.
+   */
+  entering_chapter?: boolean;
   /** Surfaced conversationally, never as a correction. */
   note?: string;
   progress?: string;
@@ -32,12 +40,20 @@ interface ToolResult {
 function whatNext(answers: AnswerMap, currentId?: string): Partial<ToolResult> {
   const next = nextQuestion(answers, currentId);
   if (next.done || !next.question) {
-    return { next_question_id: null, next_prompt: null, done: true };
+    return {
+      next_question_id: null,
+      next_prompt: null,
+      next_chapter: null,
+      entering_chapter: false,
+      done: true,
+    };
   }
   const q = next.question;
   return {
     next_question_id: q.id,
     next_prompt: q.voicePrompt ?? q.sellerLabel ?? q.label,
+    next_chapter: next.chapter,
+    entering_chapter: next.enteringChapter,
     done: false,
   };
 }

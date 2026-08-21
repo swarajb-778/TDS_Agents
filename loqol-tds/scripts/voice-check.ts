@@ -15,6 +15,12 @@ import { loadAnswers } from "../src/db/answers";
 import { hashPassword, hashToken } from "../src/db/crypto";
 import { agentQueue } from "../src/tds/flow";
 import { isLikelyHallucination, voiceInstructions } from "../src/tds/voice";
+import {
+  NUDGE_AFTER_MS,
+  isActiveResponseClash,
+  isPending,
+  replay,
+} from "../src/tds/voice-turns";
 import { POST as toolRoute } from "../src/app/api/voice/tool/route";
 
 const AGENT_ID = "eeeeeeee-0000-4000-8000-000000000001";
@@ -200,6 +206,9 @@ for (const [label, pattern] of [
   ["no legal advice", /not a lawyer/i],
   ["no pushback on switching", /do not talk them out of it/i],
   ["server owns the order", /you do not decide what comes next/i],
+  ["ask what the server returned", /ask\s+\\?`?next_prompt\\?`?\s+out loud/i],
+  ["one tool call at a time", /call one tool at a time/i],
+  ["stop at the end of a part", /this part of the form is finished/i],
   ["say nothing to a silent turn", /say nothing at all and keep\s+waiting/i],
   ["never answer from a silent turn", /never record an answer from it/i],
 ] as const) {
@@ -207,6 +216,125 @@ for (const [label, pattern] of [
 }
 assert.match(prompt, /C\.13/, "the brief must carry the actual questions");
 console.log("✓ system prompt states every rule that keeps this honest");
+
+// 10. Every result carries the signal the screen needs to show a way onward.
+//
+//     Without this the seller finishes a part, the agent goes quiet, and there
+//     is nothing on screen saying so — they sit waiting for a question that is
+//     never coming.
+for (const [what, result] of [["a recorded answer", yes], ["an explanation", explained], ["a conflict", clash]] as const) {
+  assert.equal(
+    typeof result.entering_chapter,
+    "boolean",
+    `${what} must say whether the next question leaves this part of the form`,
+  );
+  assert.equal(
+    result.done === true,
+    result.next_question_id === null,
+    `${what}: "finished" and "nothing to ask next" must never disagree`,
+  );
+  if (result.done !== true) {
+    assert.ok(
+      typeof result.next_chapter === "string" && result.next_chapter.length > 0,
+      `${what} must name the part the next question belongs to`,
+    );
+  }
+}
+console.log("✓ every tool result says where the seller is and whether this part is done");
+
+// 11. THE STALL.
+//
+//     Realtime allows one open response at a time and refuses a second
+//     outright — `conversation_already_has_active_response`, not queued, not
+//     retried. And `response.function_call_arguments.done`, the only signal
+//     that a tool was called, is emitted while that response is STILL OPEN.
+//     So a `response.create` fired the moment a tool round-trip returned was
+//     landing inside the response that made the call: refused, silently. The
+//     answer was already written, which is why it looked like the agent had
+//     simply forgotten to carry on.
+//
+//     Replayed here event for event. Indices are which event released the
+//     create — asserting the count alone would miss the whole point, which is
+//     that it has to WAIT.
+
+// (a) The model speaks and calls a tool in the same response. The create is
+//     held until that response closes, and then it goes.
+const spoke = replay([
+  { type: "response.created" },           // 0 — the model starts talking
+  { type: "tool.called", callId: "c1" },  // 1 — ...and calls a tool as it does
+  { type: "tool.settled", callId: "c1" }, // 2 — server answers, mid-response
+  { type: "response.done" },              // 3 — the spoken line finishes
+]);
+assert.deepEqual(
+  spoke.creates,
+  [3],
+  "the ask must wait for response.done — sending it at 2 is the stall",
+);
+
+// (b) Several tool calls in one response earn ONE reply, once the last is back.
+const parallel = replay([
+  { type: "response.created" },
+  { type: "tool.called", callId: "c1" },
+  { type: "tool.called", callId: "c2" },
+  { type: "response.done" },
+  { type: "tool.settled", callId: "c1" },
+  { type: "tool.settled", callId: "c2" }, // 5
+]);
+assert.deepEqual(parallel.creates, [5], "two tool calls must not race two replies");
+
+// (c) A refused create is remembered and re-sent, never dropped.
+const bounced = replay([
+  { type: "tool.called", callId: "c1" },
+  { type: "tool.settled", callId: "c1" }, // 1 — we ask
+  { type: "response.rejected" },          // 2 — refused: something was open
+  { type: "response.done" },              // 3 — it closes; ask again
+]);
+assert.deepEqual(bounced.creates, [1, 3], "a refused ask must be retried, not swallowed");
+
+// (d) And a want that somehow still goes unanswered is re-sent by the watchdog —
+//     but not so eagerly that it talks over a reply already on its way.
+const stalled = replay([
+  [{ type: "tool.called", callId: "c1" }, 0],
+  [{ type: "tool.settled", callId: "c1" }, 1_000], // 1 — asked at t=1000
+  [{ type: "nudge" }, 3_000],                      // 2 — too soon, held
+  [{ type: "nudge" }, 1_000 + NUDGE_AFTER_MS],     // 3 — now
+]);
+assert.deepEqual(stalled.creates, [1, 3], "the watchdog re-asks, but only after the grace period");
+
+// (e) Nothing is re-sent while the agent is genuinely speaking.
+const speaking = replay([
+  { type: "tool.called", callId: "c1" },
+  { type: "tool.settled", callId: "c1" },
+  { type: "response.created" },
+  [{ type: "nudge" }, 600_000],
+]);
+assert.deepEqual(speaking.creates, [1], "never interrupt a reply that is already happening");
+console.log("✓ the agent is asked to move on exactly once, and never left unasked");
+
+// 12. The seller can see the wait, and only the waits that are real.
+assert.equal(
+  isPending(replay([{ type: "tool.called", callId: "c1" }]).state),
+  true,
+  "a tool call in flight must show as pending — several seconds of silence reads as a hang",
+);
+assert.equal(isPending(speaking.state), false, "but not while the agent is talking");
+assert.equal(isPending(replay([]).state), false, "and not before anything has happened");
+
+// A clash is our timing bug, not the seller's news. Anything else still is.
+assert.equal(
+  isActiveResponseClash({ code: "conversation_already_has_active_response" }),
+  true,
+);
+assert.equal(
+  isActiveResponseClash({ message: "Conversation already has an active response" }),
+  true,
+);
+assert.equal(
+  isActiveResponseClash({ code: "session_expired", message: "Your session has expired" }),
+  false,
+  "a real failure must still reach the seller",
+);
+console.log("✓ pending shown when waiting, and our own timing errors kept off the screen");
 
 await db.delete(agents).where(eq(agents.id, AGENT_ID));
 console.log("\nvoice checks passed\n");

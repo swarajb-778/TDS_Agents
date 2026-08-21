@@ -71,6 +71,32 @@ function Spinner() {
   );
 }
 
+/**
+ * A wait, made visible.
+ *
+ * The voice round trip — model thinks, tool call, server write, model speaks —
+ * runs to several seconds. Unannounced, that reads as a hang, and a seller who
+ * thinks the app has died closes the tab. The label carries the meaning; the
+ * dots are decoration and are switched off for anyone who asked for less
+ * motion (globals.css).
+ */
+export function Pending({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-2 text-sm font-medium text-ink-muted"
+    >
+      <span aria-hidden="true" className="flex items-center gap-1">
+        <span className="pending-dot size-2 rounded-full bg-brand" />
+        <span className="pending-dot size-2 rounded-full bg-brand" />
+        <span className="pending-dot size-2 rounded-full bg-brand" />
+      </span>
+      {label}
+    </div>
+  );
+}
+
 export function Card({
   children,
   tone = "plain",

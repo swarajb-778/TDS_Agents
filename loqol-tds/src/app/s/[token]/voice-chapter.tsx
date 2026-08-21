@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChapter } from "@/tds/registry";
 import { isLikelyHallucination } from "@/tds/voice";
+import {
+  INITIAL_TURN,
+  isActiveResponseClash,
+  isPending,
+  step,
+  type TurnEvent,
+  type TurnState,
+} from "@/tds/voice-turns";
+import { Button, Card, Pending } from "@/app/ui";
 import type { ChapterId } from "@/tds/types";
 
 /**
@@ -11,32 +20,64 @@ import type { ChapterId } from "@/tds/types";
  * The model talks; it does not decide. Every tool call goes to /api/voice/tool,
  * which validates the write against the registry and answers with the next
  * question. What comes back is what gets asked.
+ *
+ * What this file is careful about is the *transport*: the Realtime API allows
+ * one open response at a time and silently refuses a second, so asking the
+ * agent to speak is routed through voice-turns.ts rather than fired off
+ * hopefully after each tool call. See that file for why.
  */
 
 type Line = { who: "seller" | "agent" | "system"; text: string };
+
+/** The chapter is over. What the seller is told, and where the button goes. */
+interface Finished {
+  heading: string;
+  detail: string;
+  cta: string;
+}
 
 interface Props {
   token: string;
   chapter: ChapterId;
   onSwitchToForm: (questionId: string) => void;
-  /** Voice writes land server-side; tell the flow to pull the map back. */
-  onWrote?: () => void;
+  /**
+   * This chapter's conversation is over — pull the answers back and move on.
+   *
+   * Deliberately not called per answer. The parent derives both the chapter and
+   * the modality from the answer set, so refreshing mid-conversation can change
+   * what it renders and tear this component down with the agent still talking.
+   * Voice writes are already safe on the server; nothing is lost by waiting
+   * until the seller taps through.
+   */
+  onAdvance?: () => void;
 }
 
 type Status = "idle" | "connecting" | "live" | "ended" | "error";
 
-export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props) {
+/** How often the watchdog asks whether the seller has been left in silence. */
+const NUDGE_INTERVAL_MS = 2_000;
+
+export function VoiceChapter({ token, chapter, onSwitchToForm, onAdvance }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [lines, setLines] = useState<Line[]>([]);
   const [recorded, setRecorded] = useState<string[]>([]);
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [turnLabel, setTurnLabel] = useState<string | null>(null);
+  /**
+   * The seller has stopped speaking and the agent has not started. Separate
+   * from the turn state on purpose: nothing is owed or in flight yet, but the
+   * seller is still sitting in silence and that is the bit that reads as a hang.
+   */
+  const [awaitingReply, setAwaitingReply] = useState(false);
+  const [finished, setFinished] = useState<Finished | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
+  const turnRef = useRef<TurnState>(INITIAL_TURN);
 
   const say = useCallback((who: Line["who"], text: string) => {
     if (!text.trim()) return;
@@ -54,14 +95,46 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
     dcRef.current = null;
     pcRef.current = null;
     streamRef.current = null;
+    turnRef.current = INITIAL_TURN;
+    setTurnLabel(null);
+    setAwaitingReply(false);
   }, []);
 
   useEffect(() => stop, [stop]);
 
-  const send = (event: unknown) => {
+  const send = useCallback((event: unknown) => {
     const dc = dcRef.current;
     if (dc?.readyState === "open") dc.send(JSON.stringify(event));
-  };
+  }, []);
+
+  /**
+   * The single place a `response.create` can come from. The reducer decides
+   * whether now is a legal moment; nothing else in this file sends one.
+   */
+  const dispatch = useCallback(
+    (event: TurnEvent) => {
+      const { state, createResponse } = step(turnRef.current, event, Date.now());
+      turnRef.current = state;
+      setTurnLabel(
+        state.outstanding.length > 0
+          ? "Writing that down…"
+          : isPending(state)
+            ? "One moment…"
+            : null,
+      );
+      if (createResponse) send({ type: "response.create" });
+    },
+    [send],
+  );
+
+  // The watchdog. If a reply is owed, nothing is speaking, and enough time has
+  // passed since we last asked, the reducer sends again. A seller must never be
+  // left sitting in silence waiting for a turn that was quietly refused.
+  useEffect(() => {
+    if (status !== "live") return;
+    const timer = setInterval(() => dispatch({ type: "nudge" }), NUDGE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [status, dispatch]);
 
   /** Run a tool call on the server and hand the result back to the model. */
   const runTool = useCallback(
@@ -72,6 +145,8 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
       } catch {
         /* the model sent malformed JSON; the server will reject it */
       }
+
+      dispatch({ type: "tool.called", callId });
 
       let result: Record<string, unknown>;
       try {
@@ -85,10 +160,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
         result = { ok: false, reason: "Could not reach the server. Ask again in a moment." };
       }
 
-      if (typeof result.recorded === "string") {
-        setRecorded((p) => [...p, result.recorded as string]);
-        onWrote?.();
-      }
+      if (typeof result.recorded === "string") setRecorded((p) => [...p, result.recorded as string]);
       if (typeof result.progress === "string") setProgressLabel(result.progress);
       if (result.ok === false && typeof result.reason === "string") {
         say("system", `Not recorded — ${result.reason}`);
@@ -102,6 +174,10 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
 
       if (typeof result.hand_off_to_form === "string") {
         // No pushback, no "are you sure". Hand over.
+        dispatch({ type: "tool.settled", callId });
+        // Settle first, then stand down: tool.settled would otherwise re-raise
+        // the want this clears. The agent gets its one goodbye and no more.
+        dispatch({ type: "reply.abandoned" });
         setTimeout(() => {
           stop();
           onSwitchToForm(result.hand_off_to_form as string);
@@ -109,14 +185,37 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
         return;
       }
 
-      send({ type: "response.create" });
+      // The server, not the agent, decides that this part is over — and the
+      // seller is told so on screen rather than being left to infer it from the
+      // agent going quiet.
+      if (result.done === true) {
+        setFinished({
+          heading: "That’s everything.",
+          detail: "Nothing left to ask. You can look it all over before you sign.",
+          cta: "Review and sign",
+        });
+      } else if (result.entering_chapter === true) {
+        const nextTitle =
+          typeof result.next_chapter === "string"
+            ? (getChapter(result.next_chapter as ChapterId)?.title ?? null)
+            : null;
+        setFinished({
+          heading: "That’s this part done.",
+          detail: nextTitle ? `Next: ${nextTitle}.` : "There’s one more part to go.",
+          cta: "Keep going",
+        });
+      }
+
+      dispatch({ type: "tool.settled", callId });
     },
-    [token, say, stop, onSwitchToForm, onWrote],
+    [token, say, send, dispatch, stop, onSwitchToForm],
   );
 
   const start = useCallback(async () => {
     setStatus("connecting");
     setError(null);
+    setFinished(null);
+    turnRef.current = INITIAL_TURN;
     try {
       const res = await fetch("/api/voice/session", {
         method: "POST",
@@ -144,7 +243,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
       dc.addEventListener("open", () => {
         setStatus("live");
         // Open the conversation rather than waiting to be spoken to.
-        send({ type: "response.create" });
+        dispatch({ type: "reply.wanted" });
       });
 
       dc.addEventListener("message", (event) => {
@@ -155,6 +254,28 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
           return;
         }
         const type = String(msg.type ?? "");
+
+        // The seller finished their turn. Everything from here until the agent
+        // is audibly speaking is dead air, so it gets an indicator.
+        if (type === "input_audio_buffer.speech_stopped") {
+          setAwaitingReply(true);
+          return;
+        }
+        if (type.startsWith("response.output_audio") || type.startsWith("response.audio_transcript")) {
+          setAwaitingReply(false);
+        }
+
+        // The response lifecycle. Tracked, not assumed — this is the whole
+        // reason the agent now reliably moves on to the next question.
+        if (type === "response.created") {
+          dispatch({ type: "response.created" });
+          return;
+        }
+        if (type === "response.done") {
+          setAwaitingReply(false);
+          dispatch({ type: "response.done" });
+          return;
+        }
 
         if (type === "response.function_call_arguments.done") {
           void runTool(String(msg.call_id), String(msg.name), String(msg.arguments ?? "{}"));
@@ -174,6 +295,13 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
           return;
         }
         if (type === "error") {
+          // "You already have a response open" is our timing problem, not the
+          // seller's news. Record it so the reducer can re-send once the floor
+          // is free, and say nothing.
+          if (isActiveResponseClash(msg.error)) {
+            dispatch({ type: "response.rejected" });
+            return;
+          }
           const detail = (msg.error as { message?: string } | undefined)?.message;
           setError(detail ?? "Something went wrong on the call.");
         }
@@ -204,7 +332,18 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
             : "Could not start the conversation.",
       );
     }
-  }, [token, chapter, runTool, say, stop]);
+  }, [token, chapter, runTool, dispatch, stop]);
+
+  const advance = useCallback(() => {
+    stop();
+    setStatus("ended");
+    onAdvance?.();
+  }, [stop, onAdvance]);
+
+  // A tool call in flight outranks plain dead air — it is the more specific
+  // truth about what the seller is waiting for. Once this part is done the
+  // button is the answer to "what now?", so the indicator stands down.
+  const pendingLabel = finished ? null : (turnLabel ?? (awaitingReply ? "One moment…" : null));
 
   const title = getChapter(chapter)?.title ?? "";
   const intro = getChapter(chapter)?.intro ?? "";
@@ -215,31 +354,32 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
 
       <p className="text-sm font-medium text-ink-muted">{title}</p>
       <h1 className="mt-1 text-2xl font-semibold text-ink">
-        {status === "live" ? "Go ahead — I'm listening" : "Let's talk this bit through"}
+        {finished
+          ? finished.heading
+          : status === "live"
+            ? "Go ahead — I'm listening"
+            : "Let's talk this bit through"}
       </h1>
-      <p className="mt-2 text-ink-muted">{intro}</p>
+      <p className="mt-2 text-ink-muted">{finished ? finished.detail : intro}</p>
       {progressLabel && <p className="mt-1 text-sm text-ink-faint">{progressLabel}</p>}
 
-      {status === "idle" && (
-        <button
-          type="button"
-          onClick={start}
-          className="mt-6 min-h-14 w-full rounded-control bg-brand px-5 text-base font-semibold text-on-brand active:bg-brand-strong"
-        >
-          Start talking
-        </button>
+      {/* Pausing must not be a dead end — there is always a way back in. */}
+      {(status === "idle" || (status === "ended" && !finished)) && (
+        <Button full className="mt-6" onClick={start}>
+          {status === "ended" ? "Pick this back up" : "Start talking"}
+        </Button>
       )}
       {status === "connecting" && (
         <p className="mt-6 text-ink-muted">Connecting — your browser will ask for the microphone.</p>
       )}
 
       {error && (
-        <div className="mt-4 rounded-control border border-attention-line bg-attention-surface p-3 text-sm text-attention">
-          {error}
-          <button type="button" onClick={start} className="ml-2 font-semibold underline">
+        <Card tone="attention" className="mt-4">
+          <p className="text-sm text-attention">{error}</p>
+          <Button variant="secondary" size="md" className="mt-3" onClick={start}>
             Try again
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
 
       {lines.length > 0 && (
@@ -262,8 +402,18 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
         </div>
       )}
 
+      {/*
+        The round trip runs to several seconds. Left unannounced it reads as a
+        hang, and a seller who thinks it has died stops waiting.
+      */}
+      {pendingLabel && (
+        <div className="mt-4">
+          <Pending label={pendingLabel} />
+        </div>
+      )}
+
       {recorded.length > 0 && (
-        <div className="mt-6 rounded-card border border-line bg-surface p-4">
+        <Card className="mt-6">
           <p className="text-sm font-medium text-ink-muted">Written down so far</p>
           <ul className="mt-2 space-y-1">
             {recorded.map((r, i) => (
@@ -272,7 +422,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
       {/*
@@ -282,28 +432,35 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
       */}
       <div className="fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-4 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-lg gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              stop();
-              setStatus("ended");
-              onSwitchToForm("");
-            }}
-            className="min-h-14 flex-1 rounded-control border-2 border-line-strong bg-surface px-4 font-medium text-ink"
-          >
-            Just show me the buttons
-          </button>
-          {status === "live" && (
-            <button
-              type="button"
-              onClick={() => {
-                stop();
-                setStatus("ended");
-              }}
-              className="min-h-14 rounded-control border-2 border-line-strong bg-surface px-4 font-medium text-ink"
-            >
-              Pause
-            </button>
+          {finished ? (
+            <Button full onClick={advance}>
+              {finished.cta}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                full
+                onClick={() => {
+                  stop();
+                  setStatus("ended");
+                  onSwitchToForm("");
+                }}
+              >
+                Just show me the buttons
+              </Button>
+              {status === "live" && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    stop();
+                    setStatus("ended");
+                  }}
+                >
+                  Pause
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
