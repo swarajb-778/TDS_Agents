@@ -1,5 +1,9 @@
 # TDS Question Registry
 
+> Registry-level notes. The full write-up — routing defended, the brief's
+> seller-experience questions answered, auth, and what was skipped — is in
+> [DECISIONS.md](DECISIONS.md).
+
 The declarative spec for the California Transfer Disclosure Statement. Every
 question on the form, declared once, with its plain-English translation, its
 voice prompt, its follow-up rules, and its PDF field mapping.
@@ -22,9 +26,9 @@ Everything else in the app is a projection of this:
       source, confidence, verbatim, updated_at)
 ```
 
-**89 questions → 135 DocuSeal fields.** Section C's 32 checkbox fields are
-generated programmatically from geometry; the rest are placed in the template
-builder.
+**89 questions → 144 DocuSeal fields**, of which 140 are placed. The whole
+template is generated: every checkbox on the TDS is a `□` glyph with a real
+position in the PDF, matched to this registry by `scripts/build-template.ts`.
 
 ## Files
 
@@ -33,12 +37,13 @@ builder.
 | `types.ts` | Question, Answer, Gate, FollowUp, DocuSealMapping, ConflictRule |
 | `registry.ts` | The form itself — chapters, all questions, translations, voice prompts |
 | `flow.ts` | Gates, next-question, follow-up synthesis, progress, resume, voice tool schemas, write validation |
-| `conflicts.ts` | 19 cross-answer rules with seller-facing messages |
-| `docuseal.ts` | Field mapping, submission builder, Section C template geometry |
+| `conflicts.ts` | 20 cross-answer rules with seller-facing messages |
+| `form-view.ts` | Registry → form projection (chip vs Yes/No, landing group) |
+| `voice.ts` | Registry → the voice agent's brief |
+| `docuseal.ts` | Field mapping, submission builder, signer fields |
 
 ```bash
-npx tsc --noEmit          # typecheck
-node scripts/smoke.js     # exercises gates, progress, conflicts, field mapping
+npm run check   # typecheck, registry integrity, flow, form projection
 ```
 
 `validateRegistry()` catches dangling gate references, enum questions with no
@@ -156,8 +161,9 @@ acknowledgement of receipt is a second submission later.
   per-unit branching doesn't
 - Attach-additional-sheets overflow when an explanation exceeds the box
 - Co-seller divergence: both sellers sign, but they answer as one voice
-- Real Section A / signature-block coordinates — `SECTION_C_GEOMETRY` shows the
-  pattern with placeholder values; the rest is template-builder work
+- Four fields with no slot on the supplied PDF, enumerated in
+  [DECISIONS.md](DECISIONS.md) §8 — it is a paraphrased TDS, not the official
+  C.A.R. form
 
 ## Wiring it up
 

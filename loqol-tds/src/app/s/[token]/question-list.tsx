@@ -93,7 +93,8 @@ export function QuestionList({
 
       {unsaved && (
         <p className="mt-4 text-sm text-amber-700">
-          Couldn&rsquo;t reach the server just now. Your answers are still here.
+          Couldn&rsquo;t reach the server just now. Your answers are still here
+          &mdash; keep going and we&rsquo;ll save them.
         </p>
       )}
 

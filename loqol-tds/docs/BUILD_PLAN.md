@@ -11,7 +11,7 @@ Rough effort split to aim for: **40% seller experience, 25% voice, 20% DocuSeal,
 
 ## ✅ 0. Question registry — DONE
 
-89 questions, 135 DocuSeal fields, gates, follow-ups, progress, resume, 19
+89 questions, 144 DocuSeal fields, gates, follow-ups, progress, resume, 20
 conflict rules, field mapping. See `docs/REGISTRY.md`.
 
 ---
@@ -77,11 +77,14 @@ integration most likely to eat a day you didn't budget.
 
 Two routes, use both:
 - **Section C** → programmatic. Extract the 16 row baselines from
-  `assets/ca-tds-blank.pdf` with pdfplumber or PyMuPDF, replace the placeholders
-  in `SECTION_C_GEOMETRY`, and `sectionCTemplateFields()` generates all 32
-  checkbox fields for `create_template_from_pdf`.
+  `assets/ca-tds-blank.pdf` with pdfplumber or PyMuPDF.
 - **Section A grid + signature blocks** → place by hand in the DocuSeal template
   builder. Irregular layout, not worth automating.
+
+*What actually happened: hand-placement turned out to be unnecessary. Every
+checkbox on the form is a `□` glyph with a real position, so the whole template
+is generated. `SECTION_C_GEOMETRY` was deleted rather than filled in — see the
+completed notes below.*
 
 **Acceptance**
 - [x] Template exists in DocuSeal Test Mode — #5513725, 140 live fields
@@ -99,7 +102,7 @@ Two routes, use both:
 is a `□` glyph with a real position in the PDF content stream.
 `scripts/extract_boxes.py` pulls all 117 out with their trailing label;
 `scripts/build-template.ts` matches them to the registry and posts
-`create_template_from_pdf`. 127 of 135 fields place automatically. Field *names*
+`create_template_from_pdf`. 140 of 144 fields place automatically. Field *names*
 always come from the registry's `docuseal` mapping — only geometry is resolved
 in the script.
 
@@ -269,18 +272,25 @@ for my agent", which goes to review.
 
 ---
 
-## 8. Write-up
+## ✅ 8. Write-up — DONE
 
 **Treat as a real deliverable, not a footnote.** The brief says *"Then defend
 it."* This is probably a third of the grade.
 
 **Acceptance**
-- [ ] The routing decision, with criteria and the question-by-question table
-- [ ] How the two paths stay consistent (one store, two adapters, nothing to sync)
-- [ ] How each of their five failure modes is handled
-- [ ] Auth explained — including why sellers get magic links, not accounts
-- [ ] **What you skipped and why.** They asked for deliberate choices. A stated
-      omission reads as senior; a silent gap reads as unfinished.
+- [x] The routing decision, with criteria and the question-by-question table
+- [x] How the two paths stay consistent (one store, two adapters, nothing to sync)
+- [x] How each of their five failure modes is handled
+- [x] Auth explained — including why sellers get magic links, not accounts
+- [x] **What you skipped and why**, enumerated rather than left to be discovered
+
+[`docs/DECISIONS.md`](DECISIONS.md) is the write-up. `README.md` was rewritten to
+point at it and to describe what actually exists.
+
+Every figure in it is generated from the code rather than remembered, and every
+quoted string was checked against its source file. Doing that turned up stale
+claims elsewhere — "19 conflict rules", "135 DocuSeal fields", and references to
+`SECTION_C_GEOMETRY`, which no longer exists — all now corrected.
 
 ---
 

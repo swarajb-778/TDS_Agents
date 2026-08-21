@@ -58,10 +58,10 @@ relitigate them mid-task; if one is genuinely blocking, say so and stop.
 
 ## Current state
 
-**Done and typechecking:** `src/tds/` — 89 questions, 135 DocuSeal fields, zero
-validator errors. Gates, follow-up queue-jumping, progress, resume, 19 conflict
-rules, field mapping, and Section C template geometry are all implemented and
-exercised by `scripts/smoke.ts`.
+**Done and typechecking:** `src/tds/` — 89 questions, 144 DocuSeal fields, zero
+validator errors. Gates, follow-up queue-jumping, progress, resume, 20 conflict
+rules and field mapping are all implemented and exercised by `scripts/smoke.ts`
+and `scripts/form-check.ts`.
 
 **Done and running against Supabase:** `src/db/` — schema, migration, seed, and
 the answer repository. `loadAnswers()` returns the `AnswerMap` the flow engine
@@ -93,8 +93,10 @@ answered, and a review screen before signing that quotes both sides back and
 lets the seller stand by both. Acknowledgements persist in
 `conflict_acknowledgements` and never alter the answers.
 
-**Not started:** the write-up and the agent view. Next task is in
-`docs/BUILD_PLAN.md`.
+**Done:** the write-up — `docs/DECISIONS.md`, with `README.md` rewritten to
+point at it.
+
+**Not started:** the agent view. Next task is in `docs/BUILD_PLAN.md`.
 
 **Known gaps:** 4 of 144 registry fields have no slot on the supplied PDF — it
 is a paraphrased TDS, not the official C.A.R. form. Enumerated in
