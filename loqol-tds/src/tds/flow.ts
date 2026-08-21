@@ -203,6 +203,24 @@ export function deferredQuestions(answers: AnswerMap): Question[] {
   );
 }
 
+/**
+ * True when nothing new is left and the seller is being shown things they set
+ * aside earlier.
+ *
+ * Matters because deferral must not become a trap: a seller who skips the last
+ * outstanding question would otherwise be handed it again forever. In this
+ * state the UI offers a way out — leave the rest for the agent — instead of
+ * looping. Nothing blocks, including the thing built to un-block.
+ */
+export function inDeferralPass(answers: AnswerMap): boolean {
+  const next = nextQuestion(answers);
+  return (
+    !next.done &&
+    !!next.question &&
+    answers[next.question.id]?.status === "skipped"
+  );
+}
+
 /** Everything the agent needs to chase — the "I don't know" queue. */
 export function agentQueue(answers: AnswerMap): Question[] {
   return visibleQuestions(answers).filter((q) => {

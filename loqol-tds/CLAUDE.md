@@ -88,8 +88,13 @@ copy, and pulls the map back before switching path. `ProgressHeader` speaks in
 chapters and minutes. Skipping defers a question to a second pass rather than
 re-asking it.
 
-**Not started:** the agent view, conflicts in the UI, and the write-up. Next
-task is in `docs/BUILD_PLAN.md`.
+**Done:** conflicts in the UI — a quiet inline note on the question just
+answered, and a review screen before signing that quotes both sides back and
+lets the seller stand by both. Acknowledgements persist in
+`conflict_acknowledgements` and never alter the answers.
+
+**Not started:** the write-up and the agent view. Next task is in
+`docs/BUILD_PLAN.md`.
 
 **Known gaps:** 4 of 144 registry fields have no slot on the supplied PDF — it
 is a paraphrased TDS, not the official C.A.R. form. Enumerated in

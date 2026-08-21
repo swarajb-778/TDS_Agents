@@ -1,11 +1,17 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { deferredQuestions, nextQuestion, resume } from "@/tds/flow";
+import {
+  deferredQuestions,
+  inDeferralPass,
+  nextQuestion,
+  resume,
+} from "@/tds/flow";
 import type { AnswerMap, ChapterId, Modality } from "@/tds/types";
 import { FeaturesChapter } from "./features-chapter";
 import { ProgressHeader } from "./progress-header";
 import { QuestionList } from "./question-list";
+import { Review } from "./review";
 import { VoiceChapter } from "./voice-chapter";
 
 /**
@@ -27,6 +33,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [override, setOverride] = useState<Modality | null>(null);
   const [landed, setLanded] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   const next = nextQuestion(answers);
   const chapter: ChapterId = next.chapter ?? "features";
@@ -69,15 +76,17 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
     [refresh, token],
   );
 
-  if (next.done) {
+  if (next.done || reviewing) {
     return (
-      <main className="mx-auto max-w-lg px-4 py-16">
-        <h1 className="text-2xl font-semibold">You&rsquo;re done, {firstName}.</h1>
-        <p className="mt-3 text-stone-600">
-          Everything&rsquo;s answered. Your agent reviews it next and sends the
-          form over for signature.
-        </p>
-      </main>
+      <Review
+        token={token}
+        sellerName={sellerName}
+        answers={answers}
+        onRevisit={() => {
+          setReviewing(false);
+          setLanded(true);
+        }}
+      />
     );
   }
 
@@ -126,10 +135,25 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
     );
   }
 
+  // Nothing new left — only things set aside. Offer the exit, or deferral
+  // becomes its own trap: skip the last question and it comes straight back.
+  const deferralEscape = inDeferralPass(answers) ? (
+    <div className="mx-auto max-w-lg px-4 pt-4">
+      <button
+        type="button"
+        onClick={() => setReviewing(true)}
+        className="text-sm font-medium text-teal-800 underline underline-offset-4"
+      >
+        That&rsquo;s everything I can answer — leave the rest for my agent
+      </button>
+    </div>
+  ) : null;
+
   if (chapter === "features") {
     return (
       <>
         <ProgressHeader answers={answers} current={chapter} />
+        {deferralEscape}
         <FeaturesChapter
           token={token}
           sellerName={sellerName}
@@ -156,6 +180,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
   return (
     <>
       <ProgressHeader answers={answers} current={chapter} />
+      {deferralEscape}
       <QuestionList
         key={`form-${chapter}-${Object.keys(answers).length}`}
         token={token}

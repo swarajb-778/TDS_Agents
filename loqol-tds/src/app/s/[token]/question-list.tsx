@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { questionsInChapter, getChapter } from "@/tds/registry";
 import { isVisible, progress } from "@/tds/flow";
+import { conflictsFor } from "@/tds/conflicts";
 import type { AnswerMap, AnswerStatus, AnswerValue, ChapterId } from "@/tds/types";
 import { QuestionControl } from "./question-control";
 
@@ -31,6 +32,8 @@ export function QuestionList({
 }: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [unsaved, setUnsaved] = useState(false);
+  /** Only ever about the question just touched — the rest waits for review. */
+  const [lastTouched, setLastTouched] = useState<string | null>(null);
 
   const meta = getChapter(chapter);
   const visible = questionsInChapter(chapter).filter((q) => isVisible(q, answers));
@@ -41,6 +44,7 @@ export function QuestionList({
     value: AnswerValue,
     status: AnswerStatus = "answered",
   ) {
+    setLastTouched(questionId);
     setAnswers((prev) => ({
       ...prev,
       [questionId]: {
@@ -101,6 +105,7 @@ export function QuestionList({
             answer={answers[q.id]}
             onChange={(value, status) => record(q.id, value, status ?? "answered")}
             onVoice={() => onSwitchToVoice?.()}
+            notes={q.id === lastTouched ? conflictsFor(q.id, answers).map((c) => c.message) : []}
           />
         ))}
       </div>

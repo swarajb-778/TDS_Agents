@@ -124,6 +124,32 @@ export const answerEvents = pgTable(
 );
 
 /**
+ * A conflict the seller looked at and stood by.
+ *
+ * "You said no pool earlier but mentioned a shared pool just now" can be a real
+ * contradiction or a real situation. The seller owns this document, so a seller
+ * who says both answers are right is allowed to be right — we record that they
+ * were asked and what they said, and stop bringing it up.
+ */
+export const conflictAcknowledgements = pgTable(
+  "conflict_acknowledgements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    /** The rule id from src/tds/conflicts.ts. */
+    ruleId: text("rule_id").notNull(),
+    /** Whatever the seller said about it, if anything. */
+    note: text("note"),
+    actorType: text("actor_type").$type<ActorType>().notNull(),
+    actorId: text("actor_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("conflict_ack_deal_rule_idx").on(t.dealId, t.ruleId)],
+);
+
+/**
  * Per-deal session preferences.
  *
  * ponytail: no last_question_id. resume() derives position from the answer set

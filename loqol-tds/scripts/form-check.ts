@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { groupsInChapter, questionsInChapter, getQuestion } from "../src/tds/registry";
 import { firstIncompleteGroup, isPresenceChip, questionsInGroup } from "../src/tds/form-view";
-import { deferredQuestions, makeAnswer, nextQuestion } from "../src/tds/flow";
+import { deferredQuestions, inDeferralPass, makeAnswer, nextQuestion } from "../src/tds/flow";
 import type { AnswerMap } from "../src/tds/types";
 
 const CH = "features" as const;
@@ -105,4 +105,37 @@ console.log("form checks passed\n");
     "deferredQuestions must list exactly what was set aside",
   );
   console.log("✓ skipped questions defer to the end and do come back");
+}
+
+// Deferral must not become its own trap. Skip the last outstanding question
+// and the seller would otherwise be handed it back forever.
+{
+  const map: AnswerMap = {};
+  for (let i = 0; i < 300; i++) {
+    const n = nextQuestion(map);
+    if (n.done || !n.question) break;
+    const q = n.question;
+    if (map[q.id]) break; // already handled: we are looping on a deferred one
+    map[q.id] = makeAnswer(
+      q.id,
+      q.type === "boolean" ? false
+        : q.type === "number" ? 0
+        : q.type === "enum" ? q.options![0].value
+        : q.type === "multi_enum" ? [q.options![0].value]
+        : q.type === "acknowledgement" ? true
+        : "x",
+      "form",
+    );
+  }
+  assert.equal(inDeferralPass(map), false, "a fully answered form is not in deferral");
+
+  const last = Object.keys(map).at(-1)!;
+  map[last] = { ...map[last], status: "skipped", value: null };
+  assert.equal(inDeferralPass(map), true, "skipping the last question enters the deferral pass");
+  assert.equal(
+    nextQuestion(map).question?.id,
+    last,
+    "and the deferred question is what is offered",
+  );
+  console.log("✓ deferral pass is detectable, so it can offer a way out");
 }

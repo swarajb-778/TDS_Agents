@@ -4,7 +4,7 @@
  */
 
 import { groupsInChapter, questionsInChapter } from "./registry";
-import { isVisible } from "./flow";
+import { isVisible, resolveQuestion } from "./flow";
 import type { AnswerMap, ChapterId, Question } from "./types";
 
 /**
@@ -63,4 +63,58 @@ export function openQuestions(
   answers: AnswerMap,
 ): Question[] {
   return questionsInChapter(chapter).filter((q) => isOpen(q, answers));
+}
+
+/**
+ * An answer as the seller should see it quoted back to them.
+ *
+ * Used by the review screen, where the whole point is showing both sides of a
+ * contradiction in the seller's own terms — never the raw stored value, and
+ * never the statute wording.
+ */
+export interface AnswerSummary {
+  questionId: string;
+  label: string;
+  value: string;
+  /** What they actually said, when it came from the voice path. */
+  verbatim?: string;
+  status: string;
+}
+
+export function describeAnswer(
+  questionId: string,
+  answers: AnswerMap,
+): AnswerSummary | null {
+  const q = resolveQuestion(questionId);
+  if (!q) return null;
+  const a = answers[questionId];
+  const label = q.sellerLabel ?? q.label;
+
+  if (!a || a.status === "unanswered") {
+    return { questionId, label, value: "not answered yet", status: "unanswered" };
+  }
+  if (a.status === "unknown") {
+    return { questionId, label, value: "not sure", status: a.status, verbatim: a.verbatim };
+  }
+  if (a.status === "skipped") {
+    return { questionId, label, value: "set aside for later", status: a.status };
+  }
+
+  const optionLabel = (v: string) =>
+    q.options?.find((o) => o.value === v)?.label ?? v;
+
+  const value =
+    a.value === true
+      ? "yes"
+      : a.value === false
+        ? "no"
+        : Array.isArray(a.value)
+          ? a.value.map(optionLabel).join(", ") || "nothing selected"
+          : typeof a.value === "string"
+            ? optionLabel(a.value)
+            : a.value === null
+              ? "blank"
+              : String(a.value);
+
+  return { questionId, label, value, status: a.status, verbatim: a.verbatim };
 }

@@ -239,15 +239,33 @@ form".
 
 ---
 
-## 7. Conflicts and unknowns in the UI
+## ✅ 7. Conflicts and unknowns in the UI — DONE
 
 **Acceptance**
-- [ ] `conflictsFor()` renders a quiet inline note on the current question
-- [ ] `detectConflicts()` renders review cards before signing, hard ones first
-- [ ] Both conflicting answers quoted verbatim, "which is right?" framing
-- [ ] Hard conflicts are dismissible with a recorded acknowledgement — a seller
+- [x] `conflictsFor()` renders a quiet inline note on the current question
+- [x] `detectConflicts()` renders review cards before signing, hard ones first
+- [x] Both conflicting answers quoted verbatim, "which is right?" framing
+- [x] Hard conflicts are dismissible with a recorded acknowledgement — a seller
       who insists both are right is allowed to be right
-- [ ] Nothing ever blocks
+- [x] Nothing ever blocks
+
+The review screen quotes both sides in the seller's own terms, including their
+`verbatim` where the answer came from voice — "Is there an HOA? You said: yes.
+*Yeah there's an HOA, Foothill Terrace something.*" next to "Any written rules
+attached to the property? You said: no". Two buttons: change an answer, or
+**both are right**.
+
+**Acknowledging settles the question, it does not edit the answer.** The
+contradiction stays in the data and stays visible to the agent; all that changes
+is that the seller stops being asked. `conflict_acknowledgements` records who
+stood by what, and when. Asserted in `db-check.ts`, including that the answer is
+untouched afterwards and that the rule still fires.
+
+**A trap this task had to close.** Task 5 made skipped questions return at the
+end — which meant skipping the *last* outstanding question handed it straight
+back, forever. Deferral had become its own block. `inDeferralPass()` detects
+that state and the UI offers "that's everything I can answer — leave the rest
+for my agent", which goes to review.
 
 ---
 

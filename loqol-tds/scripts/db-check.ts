@@ -14,6 +14,12 @@ import { agents, answerEvents, answers, deals } from "../src/db/schema";
 import { answerHistory, loadAnswers, writeAnswer, type Actor } from "../src/db/answers";
 import { hashPassword, hashToken, mintSellerToken, verifyPassword } from "../src/db/crypto";
 import { agentQueue, nextQuestion, progress } from "../src/tds/flow";
+import { detectConflicts } from "../src/tds/conflicts";
+import {
+  acknowledgeConflict,
+  reviewConflicts,
+  unacknowledgeConflict,
+} from "../src/db/conflicts";
 
 const AGENT_ID = "cccccccc-0000-4000-8000-000000000001";
 const DEAL_ID = "cccccccc-0000-4000-8000-0000000000c1";
@@ -162,6 +168,44 @@ async function main(): Promise<void> {
   const events = await db.select().from(answerEvents).where(eq(answerEvents.dealId, DEAL_ID));
   const state = await db.select().from(answers).where(eq(answers.dealId, DEAL_ID));
   console.log(`\n${state.length} answer rows, ${events.length} audit rows on the scratch deal.`);
+
+  // 7. Conflicts: detected, acknowledgeable, and never destructive.
+  await writeAnswer({ dealId: DEAL_ID, questionId: "C.12", value: false, source: "voice", actor });
+  const withClash = await loadAnswers(DEAL_ID);
+  const found = detectConflicts(withClash);
+  const hoa = found.find((c) => c.ruleId === "hoa_without_ccrs");
+  assert.ok(hoa, "an HOA with no CC&Rs must be detected");
+  assert.equal(hoa.severity, "hard");
+  assert.deepEqual(
+    found.map((c) => c.severity),
+    [...found.map((c) => c.severity)].sort((a, b) => (a === b ? 0 : a === "hard" ? -1 : 1)),
+    "hard conflicts must sort first",
+  );
+  assert.doesNotMatch(
+    hoa.message,
+    /\berror\b|\bwrong\b|\bincorrect\b|\bmistake\b/i,
+    "never tell the seller they made an error",
+  );
+
+  let reviewed = await reviewConflicts(DEAL_ID, withClash);
+  assert.equal(reviewed.find((c) => c.ruleId === "hoa_without_ccrs")?.acknowledged, false);
+
+  await acknowledgeConflict(DEAL_ID, "hoa_without_ccrs", actor, "It's a small association, no recorded CC&Rs.");
+  reviewed = await reviewConflicts(DEAL_ID, await loadAnswers(DEAL_ID));
+  const acked = reviewed.find((c) => c.ruleId === "hoa_without_ccrs");
+  assert.equal(acked?.acknowledged, true, "standing by a conflict must persist");
+  // Acknowledging settles the question, it does not edit the answers. The
+  // seller's contradiction stays visible to their agent.
+  assert.equal((await loadAnswers(DEAL_ID))["C.12"].value, false, "acknowledging must not rewrite an answer");
+  assert.ok(
+    detectConflicts(await loadAnswers(DEAL_ID)).some((c) => c.ruleId === "hoa_without_ccrs"),
+    "the conflict itself must still be detectable for the agent",
+  );
+
+  await unacknowledgeConflict(DEAL_ID, "hoa_without_ccrs");
+  reviewed = await reviewConflicts(DEAL_ID, await loadAnswers(DEAL_ID));
+  assert.equal(reviewed.find((c) => c.ruleId === "hoa_without_ccrs")?.acknowledged, false, "changing their mind must work");
+  console.log("✓ conflicts detected, acknowledgeable, and never auto-corrected");
 
   await db.delete(agents).where(eq(agents.id, AGENT_ID));
   console.log("all checks passed\n");

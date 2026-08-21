@@ -19,6 +19,8 @@ interface Props {
   ) => void;
   /** Modality is a default, not a jail — every question offers the other path. */
   onVoice: () => void;
+  /** Contradictions touching this answer. Shown, never enforced. */
+  notes?: string[];
 }
 
 const CHOICE =
@@ -26,7 +28,13 @@ const CHOICE =
 const ON = "border-teal-700 bg-teal-700 text-white";
 const OFF = "border-stone-300 bg-white text-stone-700 active:bg-stone-100";
 
-export function QuestionControl({ question, answer, onChange, onVoice }: Props) {
+export function QuestionControl({
+  question,
+  answer,
+  onChange,
+  onVoice,
+  notes = [],
+}: Props) {
   const unsure = answer?.status === "unknown";
   const value = unsure ? null : answer?.value;
 
@@ -154,6 +162,19 @@ export function QuestionControl({ question, answer, onChange, onVoice }: Props) 
           />
         )}
       </div>
+
+      {/*
+        A quiet note, not a warning and not a block. The seller keeps going
+        whatever this says; the review screen picks it up again at the end.
+      */}
+      {notes.map((note) => (
+        <p
+          key={note}
+          className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          {note}
+        </p>
+      ))}
 
       {question.whyWeAsk && (
         <p className="mt-3 text-sm text-stone-400">{question.whyWeAsk}</p>
