@@ -80,6 +80,15 @@ A yes on its own is not usable. Capture the explanation immediately, while they 
 
 If they would rather tap buttons, call switch_to_form straight away. Do not talk them out of it, do not ask why, do not offer to keep going. "Of course — I'll put that on screen for you" and move on.
 
+# When you hear nothing
+
+Microphones pick up fans, traffic and coughs, and a turn can arrive carrying no
+actual speech. If a turn has no intelligible words in it, or is only a stray
+"thank you" or "bye" that answers nothing you asked, say nothing at all and keep
+waiting. Do not fill the gap, do not say goodbye, do not repeat the question
+immediately, and never record an answer from it. A seller who has gone quiet is
+thinking, not finished.
+
 # Confidence
 
 The confidence you pass on record_answer is real and it is checked. Below 0.75 the write is rejected and you will be told to ask again. If they hedged, said "I think so", or trailed off, that is not a 0.9. Ask again rather than guessing.
@@ -94,4 +103,60 @@ ${chapterBrief(chapter)}`;
 /** Realtime wants `type: "function"` alongside the schema flow.ts already owns. */
 export function realtimeTools() {
   return voiceToolSchemas().map((t) => ({ type: "function" as const, ...t }));
+}
+
+// ---------------------------------------------------------------------------
+// Transcript hygiene
+// ---------------------------------------------------------------------------
+
+/**
+ * Speech-to-text models hallucinate on non-speech audio. Whisper in particular
+ * was trained on subtitled video, so a few seconds of room tone reliably
+ * produces "Thank you for watching" — in Japanese if the language is not
+ * pinned. Measured, not guessed: five seconds of synthetic room noise returns
+ * "ご視聴ありがとうございました" three times out of three.
+ *
+ * Left alone, that lands in the seller's own transcript looking like something
+ * they said. On a document signed under penalty, words the seller never spoke
+ * must never appear attributed to them.
+ *
+ * This is display-only defence. The real fix is upstream — noise reduction and
+ * a turn detector that does not treat a cough as a sentence — but a filter
+ * costs nothing and catches whatever gets through.
+ */
+const HALLUCINATIONS = [
+  "thank you for watching",
+  "thanks for watching",
+  "thank you for your watching",
+  "ご視聴ありがとうございました",
+  "ご清聴ありがとうございました",
+  "please subscribe",
+  "subscribe to my channel",
+  "like and subscribe",
+  "amara.org",
+  "subtitles by",
+  "the end",
+  "blank_audio",
+  "silence",
+  "music",
+  "applause",
+];
+
+/** Turns that are only filler, and cannot be an answer to anything. */
+const EMPTY_TURNS = ["thank you", "thanks", "bye", "bye bye", "goodbye", "you", "okay", "ok"];
+
+export function isLikelyHallucination(transcript: string): boolean {
+  const text = transcript.trim().toLowerCase();
+  if (!text) return true;
+
+  // Punctuation, bracketed stage directions, or a lone stray character.
+  const words = text.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
+  if (!words) return true;
+  if (/^[\[(].*[\])]$/.test(text)) return true;
+
+  if (HALLUCINATIONS.some((h) => words.includes(h))) return true;
+
+  // A bare "thank you" is not an answer to any question on this form. If the
+  // seller really did say only that, they lose nothing by it not being shown.
+  return EMPTY_TURNS.includes(words);
 }

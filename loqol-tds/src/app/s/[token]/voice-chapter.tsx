@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChapter } from "@/tds/registry";
+import { isLikelyHallucination } from "@/tds/voice";
 import type { ChapterId } from "@/tds/types";
 
 /**
@@ -159,9 +160,13 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onWrote }: Props)
           void runTool(String(msg.call_id), String(msg.name), String(msg.arguments ?? "{}"));
           return;
         }
-        // The seller must be able to see what is being recorded about them.
+        // The seller must be able to see what is being recorded about them —
+        // which is exactly why words they never said must not appear here.
+        // Transcribers hallucinate stock phrases on room noise; see
+        // isLikelyHallucination.
         if (type === "conversation.item.input_audio_transcription.completed") {
-          say("seller", String(msg.transcript ?? ""));
+          const transcript = String(msg.transcript ?? "");
+          if (!isLikelyHallucination(transcript)) say("seller", transcript);
           return;
         }
         if (type === "response.output_audio_transcript.done" || type === "response.audio_transcript.done") {

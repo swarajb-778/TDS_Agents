@@ -368,6 +368,36 @@ and the "not aware" check in §4.3.
 The seller sees a live transcript and a running list of what has been written
 down. They should never have to wonder what is being recorded about them.
 
+### 6.1 Words the seller never said
+
+Speech-to-text models hallucinate on non-speech audio. Whisper was trained on
+subtitled video, so a few seconds of room tone reliably produces *"thank you for
+watching"* — and unpinned, it produces it in Japanese. That is measured, not
+folklore: five seconds of synthetic room noise returned
+`ご視聴ありがとうございました` on three runs out of three. Pinned to English the
+same audio returns `". "`. Adding a transcription `prompt` makes it markedly
+worse, because it primes the model to produce a well-formed sentence.
+
+Left alone this lands in the seller's own transcript looking like something they
+said, and the agent answers it — which is how a seller who has said nothing gets
+told goodbye. On a document signed under penalty, that is not a cosmetic bug.
+
+Three layers, because no one of them is sufficient:
+
+- **`near_field` noise reduction** runs before both the turn detector and the
+  transcriber, so a fan never reaches either.
+- **`semantic_vad` at low eagerness** decides a turn ended using a model rather
+  than an energy threshold. A cough no longer ends a turn, and — the reason it
+  is the right default here anyway — a seller pausing to recall whether the
+  patio ever cracked is no longer interrupted.
+- **A display filter** drops stock hallucinations and filler-only turns before
+  anything is attributed to the seller. `voice-check.ts` asserts it against the
+  exact strings the transcriber actually returned, and asserts real answers
+  survive it.
+
+The prompt also tells the agent that a turn with no intelligible speech gets
+silence, not filler: *"A seller who has gone quiet is thinking, not finished."*
+
 ---
 
 ## 7. DocuSeal

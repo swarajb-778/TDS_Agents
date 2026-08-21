@@ -14,7 +14,7 @@ import { agents, deals, disclosureRequests } from "../src/db/schema";
 import { loadAnswers } from "../src/db/answers";
 import { hashPassword, hashToken } from "../src/db/crypto";
 import { agentQueue } from "../src/tds/flow";
-import { voiceInstructions } from "../src/tds/voice";
+import { isLikelyHallucination, voiceInstructions } from "../src/tds/voice";
 import { POST as toolRoute } from "../src/app/api/voice/tool/route";
 
 const AGENT_ID = "eeeeeeee-0000-4000-8000-000000000001";
@@ -147,7 +147,52 @@ const bogus = await call("record_answer", {
 assert.equal(bogus.ok, false, "a hallucinated question id must be refused");
 console.log("✓ hallucinated question ids refused");
 
-// 8. The instructions carry the rules that keep this honest.
+// 8. Transcribers hallucinate on room noise. These are not invented examples:
+//    they are what whisper-1 actually returned for five seconds of synthetic
+//    room tone, three runs out of three. Words the seller never said must never
+//    appear attributed to them.
+for (const noise of [
+  "\u3054\u8996\u8074\u3042\u308a\u304c\u3068\u3046\u3054\u3056\u3044\u307e\u3057\u305f", // "thank you for watching"
+  "Thank you for watching.",
+  "Thanks for watching!",
+  ". ",
+  ".",
+  "",
+  "   ",
+  "[BLANK_AUDIO]",
+  "(silence)",
+  "Thank you.",
+  "Bye.",
+  "you",
+  "Please subscribe",
+]) {
+  assert.equal(
+    isLikelyHallucination(noise),
+    true,
+    `transcriber noise must not reach the seller's transcript: ${JSON.stringify(noise)}`,
+  );
+}
+
+// And the filter must not swallow anything a seller would actually say.
+for (const real of [
+  "Yeah there's an HOA, Foothill Terrace something.",
+  "No, nothing like that.",
+  "Yes",
+  "No",
+  "I don't know",
+  "The back patio settled about an inch in 2019.",
+  "Thank you, yes there is a pool",
+  "Bye the way, there is a shared driveway",
+]) {
+  assert.equal(
+    isLikelyHallucination(real),
+    false,
+    `real seller speech must not be filtered: ${JSON.stringify(real)}`,
+  );
+}
+console.log("\u2713 transcriber hallucinations filtered, real answers kept");
+
+// 9. The instructions carry the rules that keep this honest.
 const prompt = voiceInstructions("awareness", "Marcus");
 for (const [label, pattern] of [
   ["never invent facts", /never write down a fact the seller did not say/i],
@@ -155,6 +200,8 @@ for (const [label, pattern] of [
   ["no legal advice", /not a lawyer/i],
   ["no pushback on switching", /do not talk them out of it/i],
   ["server owns the order", /you do not decide what comes next/i],
+  ["say nothing to a silent turn", /say nothing at all and keep\s+waiting/i],
+  ["never answer from a silent turn", /never record an answer from it/i],
 ] as const) {
   assert.match(prompt, pattern, `system prompt must state: ${label}`);
 }

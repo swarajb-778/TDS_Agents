@@ -56,7 +56,33 @@ export async function POST(request: Request) {
         tools: realtimeTools(),
         tool_choice: "auto",
         audio: {
-          input: { transcription: { model: "whisper-1" } },
+          input: {
+            /*
+             * Room tone is not speech, and three things here stop it being
+             * treated as speech.
+             *
+             * near_field noise reduction runs before both the turn detector
+             * and the transcriber, so a fan or a laptop hum never reaches
+             * either.
+             *
+             * semantic_vad decides the turn is over using a model rather than
+             * an energy threshold, which matters twice: a cough no longer ends
+             * a turn, and a seller pausing to think is no longer interrupted.
+             * "low" eagerness waits longer before concluding they are done —
+             * correct for someone recalling whether the patio ever cracked.
+             *
+             * And the language is pinned. Unpinned, whisper renders a few
+             * seconds of room noise as "ご視聴ありがとうございました" —
+             * "thank you for watching", learned from subtitled video. Pinned to
+             * English the same audio comes back as ". ". Measured, three runs
+             * each. Note that adding a `prompt` here makes it markedly worse:
+             * it primes the model to produce a well-formed sentence, and the
+             * hallucination returns in English.
+             */
+            noise_reduction: { type: "near_field" },
+            turn_detection: { type: "semantic_vad", eagerness: "low" },
+            transcription: { model: "whisper-1", language: "en" },
+          },
           output: { voice: "marin" },
         },
       },
