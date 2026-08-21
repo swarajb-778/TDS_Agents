@@ -195,6 +195,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
         chapter={chapter}
         initialAnswers={answers}
         onWrote={absorb}
+        onAdvance={() => void refresh()}
         onSwitchToVoice={() => void switchTo("voice")}
       />
     </>

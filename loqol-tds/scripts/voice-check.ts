@@ -13,7 +13,7 @@ import { closeDb, db } from "../src/db/index";
 import { agents, deals, disclosureRequests } from "../src/db/schema";
 import { loadAnswers } from "../src/db/answers";
 import { hashPassword, hashToken } from "../src/db/crypto";
-import { agentQueue } from "../src/tds/flow";
+import { agentQueue, makeAnswer } from "../src/tds/flow";
 import { isLikelyHallucination, voiceInstructions } from "../src/tds/voice";
 import {
   NUDGE_AFTER_MS,
@@ -199,7 +199,7 @@ for (const real of [
 console.log("\u2713 transcriber hallucinations filtered, real answers kept");
 
 // 9. The instructions carry the rules that keep this honest.
-const prompt = voiceInstructions("awareness", "Marcus");
+const prompt = voiceInstructions("awareness", "Marcus", {});
 for (const [label, pattern] of [
   ["never invent facts", /never write down a fact the seller did not say/i],
   ["unknown vs not aware", /not aware of any/i],
@@ -215,6 +215,23 @@ for (const [label, pattern] of [
   assert.match(prompt, pattern, `system prompt must state: ${label}`);
 }
 assert.match(prompt, /C\.13/, "the brief must carry the actual questions");
+
+// A question the seller already answered — by tapping it, or in an earlier
+// sitting — must be marked as done, or the agent reads the chapter from the top
+// and asks it again.
+const partly = voiceInstructions("awareness", "Marcus", {
+  "C.13": makeAnswer("C.13", true, "form"),
+  "C.4": { ...makeAnswer("C.4", null, "form"), status: "unknown" },
+});
+assert.match(partly, /C\.13: ALREADY ANSWERED/, "a tapped answer must be marked done");
+assert.match(partly, /C\.4: ALREADY ANSWERED \(unknown\)/, "so must an unknown");
+assert.doesNotMatch(
+  partly.split("C.13: ALREADY ANSWERED")[1].split("\n\n")[0],
+  /ask:/,
+  "an answered question must not still carry its ask wording",
+);
+assert.match(partly, /Begin with/, "the agent must be told where to start");
+assert.match(prompt, /Begin with C\.1\b/, "an untouched chapter starts at the top");
 console.log("✓ system prompt states every rule that keeps this honest");
 
 // 10. Every result carries the signal the screen needs to show a way onward.

@@ -6,6 +6,7 @@ import { isVisible, progress } from "@/tds/flow";
 import { conflictsFor } from "@/tds/conflicts";
 import type { AnswerMap, AnswerStatus, AnswerValue, ChapterId } from "@/tds/types";
 import { QuestionControl } from "./question-control";
+import { Button } from "@/app/ui";
 
 /**
  * The plain form rendering of a chapter — one control per visible question.
@@ -21,6 +22,8 @@ interface Props {
   onSwitchToVoice?: () => void;
   /** Hand the fresh map back so the other path never re-asks. */
   onWrote?: (answers: AnswerMap) => void;
+  /** Chapter finished — the flow re-derives where the seller goes next. */
+  onAdvance?: () => void;
 }
 
 export function QuestionList({
@@ -29,6 +32,7 @@ export function QuestionList({
   initialAnswers,
   onSwitchToVoice,
   onWrote,
+  onAdvance,
 }: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [unsaved, setUnsaved] = useState(false);
@@ -38,6 +42,7 @@ export function QuestionList({
   const meta = getChapter(chapter);
   const visible = questionsInChapter(chapter).filter((q) => isVisible(q, answers));
   const p = progress(answers).chapters.find((c) => c.chapter === chapter);
+  const open = visible.filter((q) => !answers[q.id]).length;
 
   async function record(
     questionId: string,
@@ -111,6 +116,22 @@ export function QuestionList({
             notes={q.id === lastTouched ? conflictsFor(q.id, answers).map((c) => c.message) : []}
           />
         ))}
+      </div>
+
+      {/*
+        Always offered, never gated on being finished. Anything still open comes
+        round again at the end, and blocking a seller here to force completeness
+        is how a session gets abandoned instead of finished.
+      */}
+      <div className="mt-6">
+        <Button full onClick={() => onAdvance?.()}>
+          {open === 0 ? "Next" : `Next \u2014 ${open} still open`}
+        </Button>
+        {open > 0 && (
+          <p className="mt-2 text-center text-sm text-ink-muted">
+            You can come back to {open === 1 ? "it" : "them"} at the end.
+          </p>
+        )}
       </div>
     </div>
   );

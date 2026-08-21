@@ -10,11 +10,23 @@
  */
 
 import { getChapter, questionsInChapter } from "./registry";
-import { followUpId, voiceToolSchemas } from "./flow";
-import type { ChapterId, Question } from "./types";
+import { followUpId, isVisible, voiceToolSchemas } from "./flow";
+import type { AnswerMap, ChapterId, Question } from "./types";
 
 /** One question, as the agent needs to understand it. */
-function brief(q: Question): string {
+function brief(q: Question, answers: AnswerMap): string {
+  const existing = answers[q.id];
+  // A question already answered — in this chapter, on the other path, or in an
+  // earlier session — must be marked. Without this the agent reads the chapter
+  // from the top and re-asks things the seller has already tapped, which is
+  // both irritating and a reason to distrust everything else it says.
+  if (existing && existing.status !== "unanswered") {
+    const said =
+      existing.status === "answered"
+        ? JSON.stringify(existing.value)
+        : existing.status.replace(/_/g, " ");
+    return `${q.id}: ALREADY ANSWERED (${said}) — do not ask this again.`;
+  }
   const lines = [`${q.id}: ${q.sellerLabel ?? q.label}`];
   if (q.voicePrompt) lines.push(`  ask: ${q.voicePrompt}`);
   if (q.plainEnglish) lines.push(`  means: ${q.plainEnglish}`);
@@ -28,10 +40,10 @@ function brief(q: Question): string {
   return lines.join("\n");
 }
 
-export function chapterBrief(chapter: ChapterId): string {
+export function chapterBrief(chapter: ChapterId, answers: AnswerMap): string {
   return questionsInChapter(chapter)
     .filter((q) => q.defaultModality !== "agent")
-    .map(brief)
+    .map((q) => brief(q, answers))
     .join("\n\n");
 }
 
@@ -43,8 +55,24 @@ export function chapterBrief(chapter: ChapterId): string {
  * This document is signed under penalty of perjury and the audit trail records
  * the model's confidence on every write.
  */
-export function voiceInstructions(chapter: ChapterId, sellerFirstName: string): string {
+export function voiceInstructions(
+  chapter: ChapterId,
+  sellerFirstName: string,
+  answers: AnswerMap,
+): string {
   const c = getChapter(chapter);
+  /*
+   * Chapter-scoped, deliberately. nextQuestion() answers a different question —
+   * where is the seller in the whole form — and this session only covers one
+   * part. Using the global next would point the agent at a question that is not
+   * even on its brief.
+   */
+  const start = questionsInChapter(chapter)
+    .filter((q) => q.defaultModality !== "agent" && isVisible(q, answers))
+    .find((q) => {
+      const a = answers[q.id];
+      return !a || a.status === "unanswered";
+    });
 
   return `You are helping ${sellerFirstName} fill in part of a California Transfer Disclosure Statement, out loud, over their phone or laptop. They are probably tired, they are not a lawyer, and they did not choose to do this. Be warm, brief, and unhurried.
 
@@ -97,11 +125,19 @@ thinking, not finished.
 
 The confidence you pass on record_answer is real and it is checked. Below 0.75 the write is rejected and you will be told to ask again. If they hedged, said "I think so", or trailed off, that is not a 0.9. Ask again rather than guessing.
 
+# Where to start
+
+${
+  start
+    ? `Begin with ${start.id}. Anything marked ALREADY ANSWERED below is done — the seller may have tapped it on screen, or answered it in an earlier sitting. Do not ask it again. If you need to confirm one of them, do it once at the end, not as you go.`
+    : "Everything in this part is answered. Say so, briefly, and stop."
+}
+
 # ${c?.title ?? chapter}
 
 ${c?.intro ?? ""}
 
-${chapterBrief(chapter)}`;
+${chapterBrief(chapter, answers)}`;
 }
 
 /** Realtime wants `type: "function"` alongside the schema flow.ts already owns. */

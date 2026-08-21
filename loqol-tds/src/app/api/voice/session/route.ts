@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       session: {
         type: "realtime",
         model: MODEL,
-        instructions: voiceInstructions(chapter, firstName),
+        instructions: voiceInstructions(chapter, firstName, answers),
         tools: realtimeTools(),
         tool_choice: "auto",
         audio: {

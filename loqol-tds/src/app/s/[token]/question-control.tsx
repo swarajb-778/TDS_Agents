@@ -160,6 +160,27 @@ export function QuestionControl({
           </div>
         )}
 
+        {/*
+          Section D is a covenant about closing day, not a question — but it
+          still needs an act. Without a control the seller reads "just read and
+          confirm" and has nothing to confirm with, and the chapter can never
+          complete.
+        */}
+        {question.type === "acknowledgement" && (
+          <button
+            type="button"
+            onClick={() => onChange(true)}
+            aria-pressed={answer?.value === true}
+            className={`min-h-12 w-full rounded-control border-2 px-4 text-base font-medium transition-colors duration-150 ${
+              answer?.value === true
+                ? "border-brand bg-brand text-on-brand"
+                : "border-line-strong bg-surface text-ink active:bg-surface-sunken"
+            }`}
+          >
+            {answer?.value === true ? "Confirmed" : "I understand and confirm"}
+          </button>
+        )}
+
         {question.type === "enum" && (
           <div className="flex flex-wrap gap-2">
             {question.options?.map((option) => (
