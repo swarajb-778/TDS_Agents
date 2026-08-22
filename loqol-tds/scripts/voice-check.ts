@@ -16,6 +16,11 @@ import { hashPassword, hashToken } from "../src/db/crypto";
 import { agentQueue, makeAnswer } from "../src/tds/flow";
 import { isLikelyHallucination, voiceInstructions } from "../src/tds/voice";
 import {
+  SIGNER_FIELDS,
+  buildSubmission,
+  expectedFieldNames,
+} from "../src/tds/docuseal";
+import {
   NUDGE_AFTER_MS,
   isActiveResponseClash,
   isPending,
@@ -205,6 +210,39 @@ for (const real of [
   );
 }
 console.log("\u2713 transcriber hallucinations filtered, real answers kept");
+
+// The seller must never be walked through the form again at signing time.
+// Locking only the *filled* fields leaves every blank one editable, and
+// DocuSeal then asks for each of them in the form's own language.
+{
+  const payload = buildSubmission({
+    templateId: 1,
+    answers: {},
+    sellers: [{ role: "", email: "seller@loqol.test" }],
+    listingAgent: { role: "", email: "agent@loqol.test" },
+  });
+  const locked = payload.submitters[0].readonly_fields;
+
+  const interview = expectedFieldNames().filter(
+    (n) => !SIGNER_FIELDS.some((f) => f.name === n),
+  );
+  for (const name of interview) {
+    assert.ok(
+      locked.includes(name),
+      `${name} must be locked even with no answer — a blank is deliberate, not a prompt`,
+    );
+  }
+  // And the only things the seller is actually here to do stay open.
+  for (const field of SIGNER_FIELDS) {
+    assert.ok(
+      !locked.includes(field.name),
+      `${field.name} must stay signable`,
+    );
+  }
+  console.log(
+    `\u2713 all ${interview.length} interview fields locked at signing, ${SIGNER_FIELDS.length} signer fields open`,
+  );
+}
 
 // 9. The instructions carry the rules that keep this honest.
 const prompt = voiceInstructions("awareness", "Marcus", {});

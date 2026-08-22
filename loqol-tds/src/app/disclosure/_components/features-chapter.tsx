@@ -41,6 +41,8 @@ interface Props {
   onChapterDone?: () => void;
   /** Hand the fresh map back so the other path never re-asks. */
   onWrote?: (answers: AnswerMap) => void;
+  /** Modality is a default, not a jail — even here. */
+  onSwitchToVoice?: () => void;
 }
 
 export function FeaturesChapter({
@@ -48,11 +50,11 @@ export function FeaturesChapter({
   initialAnswers,
   onChapterDone,
   onWrote,
+  onSwitchToVoice,
 }: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
   const [index, setIndex] = useState(() => firstIncompleteGroup(CHAPTER, initialAnswers));
   const [unsaved, setUnsaved] = useState(false);
-  const [voiceNote, setVoiceNote] = useState(false);
 
   const groups = groupsInChapter(CHAPTER);
   const chapter = getChapter(CHAPTER)!;
@@ -234,7 +236,7 @@ export function FeaturesChapter({
                 answer={answers[q.id]}
                 answers={answers}
                 onChange={(value, status) => record(q.id, value, status ?? "answered")}
-                onVoice={() => setVoiceNote(true)}
+                onVoice={() => onSwitchToVoice?.()}
               />
             ))}
           </div>
@@ -242,17 +244,11 @@ export function FeaturesChapter({
 
         <button
           type="button"
-          onClick={() => setVoiceNote(true)}
+          onClick={() => onSwitchToVoice?.()}
           className="mt-6 inline-flex min-h-11 items-center py-3 -my-2 text-sm font-medium underline underline-offset-4 text-brand-strong"
         >
           Not sure about any of these? Talk it through instead
         </button>
-        {voiceNote && (
-          <p className="mt-2 text-sm text-ink-muted">
-            Voice answering is the next thing being built — for now, anything you
-            skip goes to your agent.
-          </p>
-        )}
       </main>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-4 py-4 backdrop-blur">

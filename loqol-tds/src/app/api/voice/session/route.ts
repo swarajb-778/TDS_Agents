@@ -77,7 +77,29 @@ export async function POST(request: Request) {
              * hallucination returns in English.
              */
             noise_reduction: { type: "near_field" },
-            turn_detection: { type: "semantic_vad", eagerness: "low" },
+            /*
+             * server_vad rather than semantic_vad, and this is a trade.
+             *
+             * semantic_vad is the better judge of when someone has finished a
+             * thought, which is why it was the first choice. But its onset
+             * detection is not tunable — `eagerness` only says how patiently it
+             * waits for you to finish, not how loud a sound has to be before it
+             * counts as you starting. A cough or a passing car still registered
+             * as the seller speaking, which truncated the agent mid-question.
+             *
+             * server_vad exposes the knob that actually matters here. 0.8 needs
+             * clearly audible speech and ignores room tone; 1500ms of silence
+             * before a turn ends leaves room to think, which is the whole point
+             * of routing these questions to voice. Interruption stays ON — a
+             * seller must be able to cut in with "wait, what?" — it is just
+             * much harder to trigger by accident.
+             */
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.8,
+              prefix_padding_ms: 500,
+              silence_duration_ms: 1500,
+            },
             transcription: { model: "whisper-1", language: "en" },
           },
           output: { voice: "marin" },

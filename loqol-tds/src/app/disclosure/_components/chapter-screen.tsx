@@ -75,7 +75,12 @@ export function ChapterScreen({
     </div>
   ) : null;
 
-  if (modality === "voice" && chapter !== "features") {
+  /*
+   * Features defaults to the form because forty checkboxes read aloud is
+   * torture. But the mic affordance on that screen promises a way out, and a
+   * promise the product will not keep is worse than no affordance at all.
+   */
+  if (modality === "voice") {
     return (
       <VoiceChapter
         chapter={chapter}
@@ -95,6 +100,7 @@ export function ChapterScreen({
           initialAnswers={answers}
           onWrote={absorb}
           onChapterDone={advance}
+          onSwitchToVoice={() => switchTo("voice")}
         />
       </>
     );

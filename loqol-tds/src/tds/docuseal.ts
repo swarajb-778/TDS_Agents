@@ -315,7 +315,24 @@ export function buildSubmission(opts: {
   sendEmail?: boolean;
 }): SubmissionPayload {
   const values = toFieldValues(opts.answers);
-  const locked = Object.keys(values);
+
+  /*
+   * Every interview field is locked, not just the ones that came out with a
+   * value.
+   *
+   * Locking only the filled ones leaves the rest editable, and DocuSeal then
+   * walks the seller through each unfilled field it thinks they still owe it —
+   * a hundred-odd steps of a form they have already been through, asking for
+   * answers in the form's own language rather than ours. A blank here means the
+   * seller left it blank on purpose, or it goes to their agent. It is never an
+   * invitation to fill it in at signing time.
+   *
+   * Signature, initials and date fields are deliberately absent from this list:
+   * those are the only things the seller is here to do.
+   */
+  const locked = expectedFieldNames().filter(
+    (name) => !SIGNER_FIELDS.some((f) => f.name === name),
+  );
 
   const submitters = [
     ...opts.sellers.map((s, i) => ({
