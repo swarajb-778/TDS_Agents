@@ -150,6 +150,12 @@ npm run smoke        # exercises gates, follow-ups, progress, conflicts, mapping
 
 `npm run validate` must pass before any commit that touches the registry.
 
+## Picking this up
+
+Read `docs/HANDOFF.md` first. It carries what neither the README nor
+DECISIONS does: current state, the two paths that have never been verified,
+and five hard-won constraints that look removable and are not.
+
 ## Working style for this repo
 
 - Read `src/tds/types.ts` before touching anything else — it's short and it

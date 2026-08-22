@@ -8,6 +8,10 @@ a filled, signable PDF.
 decision and its defence, the six seller-experience questions from the brief,
 the auth model, and what I deliberately skipped. Start there.
 
+**→ [`docs/HANDOFF.md`](docs/HANDOFF.md) if you are picking this up.** What is
+true right now, what has never been verified, and the five things that took
+longest to learn — each of which is easy to undo by accident.
+
 ---
 
 ## Run it
