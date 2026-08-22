@@ -21,21 +21,25 @@ import {
   isPending,
   replay,
 } from "../src/tds/voice-turns";
-import { POST as toolRoute } from "../src/app/api/voice/tool/route";
+import { runVoiceTool } from "../src/app/api/voice/tool/route";
 
 const AGENT_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const DEAL_ID = "eeeeeeee-0000-4000-8000-0000000000e1";
 const TOKEN = "voice-check-token";
+/** Set by setup(); it is the actor id on every answer the seller writes. */
+let REQUEST_ID = "";
 
+/**
+ * The seller is identified by their session cookie in the real route, which is
+ * a request concern. This exercises the half that matters here — what a tool
+ * call actually does — with the identity supplied directly.
+ */
 async function call(name: string, args: Record<string, unknown>) {
-  const res = await toolRoute(
-    new Request("http://local/api/voice/tool", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: TOKEN, name, args }),
-    }),
-  );
-  return (await res.json()) as Record<string, unknown>;
+  return (await runVoiceTool(
+    { dealId: DEAL_ID, requestId: REQUEST_ID },
+    name,
+    args,
+  )) as unknown as Record<string, unknown>;
 }
 
 async function setup() {
@@ -53,11 +57,15 @@ async function setup() {
     sellerEmail: "scratch@loqol.test",
     propertyAddress: "nowhere",
   });
-  await db.insert(disclosureRequests).values({
-    dealId: DEAL_ID,
-    tokenHash: hashToken(TOKEN),
-    expiresAt: new Date(Date.now() + 86_400_000),
-  });
+  const [request] = await db
+    .insert(disclosureRequests)
+    .values({
+      dealId: DEAL_ID,
+      tokenHash: hashToken(TOKEN),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    })
+    .returning({ id: disclosureRequests.id });
+  REQUEST_ID = request.id;
 }
 
 await setup();

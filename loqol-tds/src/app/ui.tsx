@@ -20,6 +20,18 @@ type ButtonProps = {
   busy?: boolean;
   className?: string;
   "aria-label"?: string;
+  /**
+   * Renders an anchor instead of a button.
+   *
+   * For actions that really are navigations — downloading the signed PDF,
+   * opening the signing page in its own tab. A button that navigates loses
+   * middle-click, "save link as", and the browser's own download handling,
+   * which is exactly what those two need.
+   */
+  href?: string;
+  download?: boolean;
+  /** Anchors only. Always paired with rel="noopener" below. */
+  newTab?: boolean;
 };
 
 const VARIANT = {
@@ -43,17 +55,38 @@ export function Button({
   disabled,
   busy,
   className = "",
+  href,
+  download,
+  newTab,
   ...rest
 }: ButtonProps) {
+  const shape = `inline-flex items-center justify-center gap-2 rounded-control border-2 font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
+    size === "lg" ? "min-h-14 px-5 text-base" : "min-h-11 px-4 text-sm"
+  } ${full ? "w-full" : ""} ${VARIANT[variant]} ${className}`;
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        download={download}
+        target={newTab ? "_blank" : undefined}
+        // Never without noopener: the opened page gets no handle on this one.
+        rel={newTab ? "noopener noreferrer" : undefined}
+        className={shape}
+        {...rest}
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={`inline-flex items-center justify-center gap-2 rounded-control border-2 font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
-        size === "lg" ? "min-h-14 px-5 text-base" : "min-h-11 px-4 text-sm"
-      } ${full ? "w-full" : ""} ${VARIANT[variant]} ${className}`}
+      className={shape}
       {...rest}
     >
       {busy && <Spinner />}

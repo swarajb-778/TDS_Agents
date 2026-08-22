@@ -57,3 +57,41 @@ export function recordLoginAttempt(email: string, ip: string): RateVerdict {
 export function clearLoginAttempts(email: string): void {
   buckets.delete(`e:${email.trim().toLowerCase()}`);
 }
+
+/*
+ * The other doors into an account: signup, "email me a reset link", and the
+ * reset form itself.
+ *
+ * Tighter than login, for a different reason. Login costs an attacker nothing
+ * but a request; these three each cost us an email, so an unlimited reset
+ * endpoint is a mail bomb aimed at whichever address the attacker names — and
+ * a signup endpoint with no ceiling is a way to fill the agents table.
+ *
+ * Same two windows, same cooldown-not-lock rule, keyed per action so spending
+ * the signup budget cannot lock anyone out of a password reset.
+ */
+const PER_EMAIL_SLOW = 3;
+const PER_IP_SLOW = 15;
+
+/**
+ * Call once per attempt, before doing any work the caller could measure.
+ *
+ * `action` namespaces the buckets; `email` may be any identifier for the target
+ * of the request (an address, or a token holder's address once resolved).
+ */
+export function recordAccountAttempt(
+  action: string,
+  email: string,
+  ip: string,
+): RateVerdict {
+  const now = Date.now();
+  const byEmail = bump(`${action}:e:${email.trim().toLowerCase()}`, PER_EMAIL_SLOW, now);
+  const byIp = bump(`${action}:i:${ip}`, PER_IP_SLOW, now);
+  const retryAfterSeconds = Math.max(byEmail, byIp);
+  return { ok: retryAfterSeconds === 0, retryAfterSeconds };
+}
+
+/** Test seam: the checks in scripts/db-check.ts need a clean window. */
+export function clearAccountAttempts(action: string, email: string): void {
+  buckets.delete(`${action}:e:${email.trim().toLowerCase()}`);
+}

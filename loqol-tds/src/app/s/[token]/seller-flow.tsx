@@ -12,6 +12,7 @@ import { FeaturesChapter } from "./features-chapter";
 import { ProgressHeader } from "./progress-header";
 import { QuestionList } from "./question-list";
 import { Review } from "./review";
+import { SignChapter } from "./sign-chapter";
 import { VoiceChapter } from "./voice-chapter";
 
 /**
@@ -34,6 +35,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
   const [override, setOverride] = useState<Modality | null>(null);
   const [landed, setLanded] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [signing, setSigning] = useState(false);
 
   const next = nextQuestion(answers);
   const chapter: ChapterId = next.chapter ?? "features";
@@ -84,6 +86,20 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
     [refresh, token],
   );
 
+  // The signature step. Terminal by intent: once the document is signed there
+  // is nothing to go back to, so this branch sits above the review screen and
+  // owns every state after it — including "I need to change something", which
+  // flags the deal rather than reopening the document.
+  if (signing) {
+    return (
+      <SignChapter
+        sellerName={sellerName}
+        answers={answers}
+        onBack={() => setSigning(false)}
+      />
+    );
+  }
+
   if (next.done || reviewing) {
     return (
       <Review
@@ -94,6 +110,7 @@ export function SellerFlow({ token, sellerName, initialAnswers, initialModality 
           setReviewing(false);
           setLanded(true);
         }}
+        onSign={() => setSigning(true)}
       />
     );
   }

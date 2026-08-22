@@ -8,29 +8,28 @@
  */
 
 import { NextResponse } from "next/server";
-import { resolveSellerToken } from "@/db/requests";
+import { sellerForMutation } from "@/db/seller-guard";
 import { savePreferences } from "@/db/sessions";
 
 export async function POST(request: Request) {
-  let body: { token?: unknown; modality?: unknown };
+  let body: { modality?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  if (typeof body.token !== "string") {
-    return NextResponse.json({ error: "Malformed request." }, { status: 400 });
-  }
   if (body.modality !== "form" && body.modality !== "voice") {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  const session = await resolveSellerToken(body.token);
-  if (!session) {
-    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
+  // The deal comes from the session cookie, never from the body. There is no
+  // parameter here that could name someone else's disclosure.
+  const auth = await sellerForMutation();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  await savePreferences(session.dealId, { modality: body.modality });
+  await savePreferences(auth.session.dealId, { modality: body.modality });
   return NextResponse.json({ ok: true });
 }

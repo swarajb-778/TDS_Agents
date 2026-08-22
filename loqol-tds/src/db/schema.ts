@@ -11,6 +11,7 @@ import {
   uuid,
   text,
   jsonb,
+  integer,
   real,
   timestamp,
   index,
@@ -171,3 +172,92 @@ export const sessions = pgTable("sessions", {
   transcript: jsonb("transcript").$type<unknown[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Why a one-time link was issued. Same lifecycle, two different doors. */
+export type AgentTokenPurpose = "sign_in" | "password_reset";
+
+/**
+ * One-time links for the agent side: the sign-in link a new signup is emailed,
+ * and the password-reset link. Same shape as the seller's magic link — 256 bits
+ * from the CSPRNG, stored only as a SHA-256 hash (see crypto.ts for why a KDF
+ * would be the wrong tool on a token with nothing to guess).
+ *
+ * ponytail: no status column, matching disclosure_requests. Live / used /
+ * expired is a function of consumed_at, expires_at and the clock. Redeeming a
+ * token sets consumed_at; so does changing the password, which is how an
+ * outstanding reset link dies the moment it stops being the only way in.
+ */
+export const agentTokens = pgTable(
+  "agent_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    purpose: text("purpose").$type<AgentTokenPurpose>().notNull(),
+    /** SHA-256 of the token. The plaintext exists only in the emailed link. */
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("agent_tokens_agent_idx").on(t.agentId)],
+);
+
+/**
+ * A DocuSeal submission for a deal — the signable document, and what became of
+ * it.
+ *
+ * ponytail: still no status column. "not sent / awaiting signature / signed" is
+ * a function of whether a row exists and whether completed_at is set, and the
+ * authority on the middle state is DocuSeal itself, which is polled. What gets
+ * stored is only what this app cannot re-derive: which submission belongs to
+ * which deal, and the seller's own timestamps.
+ *
+ * A row per submission rather than columns on `deals`, because a deal can
+ * legitimately have more than one over its life: a seller who spots a mistake
+ * after signing gets a fresh link and signs again, and the superseded document
+ * still exists and still needs to be findable.
+ *
+ * NOT here: the buyer's acknowledgement of receipt. That is a second submission
+ * against the same template, created at offer time with the Buyer 1 / Buyer 2
+ * roles that `docuseal.ts` leaves deliberately unassigned. It would attach as
+ * another row on this table with a `purpose` discriminator. Out of scope: at
+ * disclosure time there is no buyer.
+ */
+export const signings = pgTable(
+  "signings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    /** DocuSeal's submission id. The webhook arrives carrying this and nothing
+     *  else this app can trust, so it is the join key. */
+    submissionId: integer("submission_id").notNull(),
+    /** Seller 1's submitter id, so a completion for the countersigning agent is
+     *  never mistaken for the seller signing. */
+    submitterId: integer("submitter_id").notNull(),
+    /** Seller 1's public signing URL. Not a secret to the seller — it is their
+     *  own document — but it is scoped to one submitter and one submission. */
+    embedSrc: text("embed_src").notNull(),
+    /** When the seller finished signing. `deals.submitted_at` mirrors this;
+     *  this one says which document they signed. */
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    /**
+     * The seller remembering something at 11pm, after signing.
+     *
+     * A signed legal document is never edited, so this changes nothing about
+     * the document. It flags the deal for the agent, who issues a fresh request.
+     * Whether it is still outstanding is derived: it is, until a disclosure
+     * request is issued after this timestamp.
+     */
+    changeRequestedAt: timestamp("change_requested_at", { withTimezone: true }),
+    changeNote: text("change_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("signings_submission_idx").on(t.submissionId),
+    index("signings_deal_idx").on(t.dealId),
+  ],
+);

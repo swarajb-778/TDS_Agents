@@ -28,7 +28,17 @@ export default async function AgentLayout({
             <span className="text-sm text-ink-muted">Disclosures</span>
           </Link>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-ink-muted sm:inline">{agent.name}</span>
+            {/* The name is the way into settings — the convention every app
+                this sits beside already uses. */}
+            <Link
+              href="/agent/settings"
+              className="inline-flex min-h-11 items-center text-sm text-ink-muted underline decoration-transparent transition-colors duration-150 hover:text-ink hover:decoration-current"
+            >
+              {/* The name where there is room for it, a word where there
+                  isn't — settings must not be unreachable on a phone. */}
+              <span className="hidden sm:inline">{agent.name}</span>
+              <span className="sm:hidden">Account</span>
+            </Link>
             <SignOut />
           </div>
         </div>

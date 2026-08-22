@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { resolveSellerToken } from "@/db/requests";
+import { sellerForMutation, sellerForRead } from "@/db/seller-guard";
 import { loadAnswers } from "@/db/answers";
 import {
   acknowledgeConflict,
@@ -15,35 +15,37 @@ import {
 } from "@/db/conflicts";
 import { CONFLICT_RULES } from "@/tds/conflicts";
 
-export async function GET(request: Request) {
-  const token = new URL(request.url).searchParams.get("token") ?? "";
-  const session = await resolveSellerToken(token);
-  if (!session) {
-    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
+export async function GET() {
+  const auth = await sellerForRead();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const answers = await loadAnswers(session.dealId);
-  return NextResponse.json({ conflicts: await reviewConflicts(session.dealId, answers) });
+  const answers = await loadAnswers(auth.session.dealId);
+  return NextResponse.json({
+    conflicts: await reviewConflicts(auth.session.dealId, answers),
+  });
 }
 
 export async function POST(request: Request) {
-  let body: { token?: unknown; ruleId?: unknown; note?: unknown; undo?: unknown };
+  let body: { ruleId?: unknown; note?: unknown; undo?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  if (typeof body.token !== "string" || typeof body.ruleId !== "string") {
+  if (typeof body.ruleId !== "string") {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
   if (!CONFLICT_RULES.some((r) => r.id === body.ruleId)) {
     return NextResponse.json({ error: "Unknown conflict." }, { status: 400 });
   }
 
-  const session = await resolveSellerToken(body.token);
-  if (!session) {
-    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
+  const auth = await sellerForMutation();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const session = auth.session;
 
   if (body.undo === true) {
     await unacknowledgeConflict(session.dealId, body.ruleId);

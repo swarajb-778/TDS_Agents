@@ -27,11 +27,15 @@ interface Props {
   sellerName: string;
   answers: AnswerMap;
   onRevisit: () => void;
+  /** On to the signature step. Nothing on this screen blocks reaching it. */
+  onSign: () => void;
 }
 
-export function Review({ token, sellerName, answers, onRevisit }: Props) {
+export function Review({ token, sellerName, answers, onRevisit, onSign }: Props) {
   const [conflicts, setConflicts] = useState<ReviewedConflict[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** Undefined until we know. The last button stays put rather than flickering. */
+  const [signed, setSigned] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     fetch(`/api/conflicts?token=${encodeURIComponent(token)}`)
@@ -39,6 +43,28 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
       .then((d) => setConflicts(d.conflicts ?? []))
       .catch(() => setConflicts([]));
   }, [token]);
+
+  /*
+   * A seller who has already signed and comes back through their link must not
+   * be asked to sign a second time. The signing step owns every post-signature
+   * state, including "I need to change something", so hand straight over.
+   */
+  useEffect(() => {
+    let live = true;
+    fetch("/api/sign")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!live || !d) return setSigned(false);
+        setSigned(d.state === "signed");
+        if (d.state === "signed") onSign();
+      })
+      .catch(() => live && setSigned(false));
+    return () => {
+      live = false;
+    };
+    // Once, on mount. onSign is a setState wrapper and is stable in practice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function setAcknowledged(ruleId: string, undo: boolean) {
     setBusy(ruleId);
@@ -172,14 +198,23 @@ export function Review({ token, sellerName, answers, onRevisit }: Props) {
         </section>
       )}
 
+      {/*
+        The one action on this screen, and nothing above can disable it. A
+        contradiction the seller stands by, a question they left for their
+        agent — none of that stops them finishing. An abandoned session is
+        worse than an inconsistent one.
+      */}
       <button
         type="button"
-        className="mt-8 min-h-14 w-full rounded-control bg-brand px-5 font-semibold text-on-brand active:bg-brand-strong"
+        onClick={onSign}
+        disabled={signed === undefined}
+        className="mt-8 min-h-14 w-full rounded-control bg-brand px-5 font-semibold text-on-brand transition-colors duration-150 active:bg-brand-strong disabled:opacity-45"
       >
-        Send to my agent
+        Read it over and sign
       </button>
       <p className="mt-2 text-center text-sm text-ink-muted">
-        You&rsquo;ll get the form to sign once they&rsquo;ve looked it over.
+        We&rsquo;ll show you your answers on the real form. You sign it there,
+        and your agent signs after you.
       </p>
     </main>
   );

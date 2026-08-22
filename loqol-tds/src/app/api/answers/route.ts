@@ -1,13 +1,15 @@
 /**
- * The seller's write endpoint. Both modalities will land here; the form path
- * uses it now, the voice path's tool calls will use it in task 4.
+ * The seller's write endpoint. Both modalities land here.
  *
- * Authenticated by the magic-link token, sent in the body rather than the URL
- * so it does not end up in access logs.
+ * Authenticated by the seller session cookie — the magic-link token was spent
+ * once at `/s/[token]` and never travels again, so it is not in this URL, this
+ * body, or any access log. Clients may still send a `token` field; it is
+ * ignored, and deliberately so: an inert field cannot become a second, weaker
+ * way in.
  */
 
 import { NextResponse } from "next/server";
-import { resolveSellerToken } from "@/db/requests";
+import { sellerForMutation, sellerForRead } from "@/db/seller-guard";
 import { loadAnswers, writeAnswer } from "@/db/answers";
 import { loadPreferences } from "@/db/sessions";
 import type { AnswerStatus, AnswerValue, Modality } from "@/tds/types";
@@ -36,11 +38,10 @@ interface IncomingAnswer {
  * checks the value against that question's type in the registry — something no
  * generic schema can express, since the expected type differs per question id.
  */
-function parseBody(body: unknown): { token: string; answers: IncomingAnswer[] } | null {
+function parseBody(body: unknown): { answers: IncomingAnswer[] } | null {
   if (typeof body !== "object" || body === null) return null;
-  const { token, answers } = body as Record<string, unknown>;
+  const { answers } = body as Record<string, unknown>;
 
-  if (typeof token !== "string" || !token) return null;
   if (!Array.isArray(answers) || answers.length === 0 || answers.length > 100) {
     return null;
   }
@@ -67,22 +68,21 @@ function parseBody(body: unknown): { token: string; answers: IncomingAnswer[] } 
       note: a.note as string | undefined,
     });
   }
-  return { token, answers: parsed };
+  return { answers: parsed };
 }
 
 /**
  * The current answer set. Both input paths read this, which is what makes
  * switching between them free — there is one store and nothing to sync.
  */
-export async function GET(request: Request) {
-  const token = new URL(request.url).searchParams.get("token") ?? "";
-  const session = await resolveSellerToken(token);
-  if (!session) {
-    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
+export async function GET() {
+  const auth = await sellerForRead();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
   const [answers, preferences] = await Promise.all([
-    loadAnswers(session.dealId),
-    loadPreferences(session.dealId),
+    loadAnswers(auth.session.dealId),
+    loadPreferences(auth.session.dealId),
   ]);
   return NextResponse.json({ answers, modality: preferences.modality });
 }
@@ -100,11 +100,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  const session = await resolveSellerToken(parsed.token);
-  if (!session) {
-    // Unknown, revoked, or expired. The agent can reissue the link.
-    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
+  // Unknown, revoked, expired or already submitted. The seller is told which
+  // on the help page, and every one of those has a way forward from there.
+  const auth = await sellerForMutation();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const session = auth.session;
 
   // A rejected answer is never fatal. We report which ones didn't take and let
   // the seller keep going — an abandoned session is worse than a gap.

@@ -3,11 +3,11 @@
  *
  * The standing API key never leaves the server. The ephemeral key is scoped to
  * one session and expires on its own, and this route will only mint one for a
- * caller holding a valid magic-link token.
+ * browser carrying a live seller session cookie.
  */
 
 import { NextResponse } from "next/server";
-import { resolveSellerToken } from "@/db/requests";
+import { sellerForMutation } from "@/db/seller-guard";
 import { loadAnswers } from "@/db/answers";
 import { nextQuestion, progress } from "@/tds/flow";
 import { realtimeTools, voiceInstructions } from "@/tds/voice";
@@ -21,20 +21,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Voice is not configured." }, { status: 503 });
   }
 
-  let body: { token?: unknown; chapter?: unknown };
+  let body: { chapter?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
-  if (typeof body.token !== "string") {
-    return NextResponse.json({ error: "Malformed request." }, { status: 400 });
+  const auth = await sellerForMutation();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-
-  const session = await resolveSellerToken(body.token);
-  if (!session) {
-    return NextResponse.json({ error: "This link is no longer valid." }, { status: 401 });
-  }
+  const session = auth.session;
 
   const answers = await loadAnswers(session.dealId);
   const next = nextQuestion(answers);

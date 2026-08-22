@@ -7,10 +7,16 @@ import { reviewConflicts } from "@/db/conflicts";
 import { CHAPTERS, questionsInChapter } from "@/tds/registry";
 import { agentQueue, deferredQuestions, isVisible, progress } from "@/tds/flow";
 import { describeAnswer } from "@/tds/form-view";
-import { Card, Pill } from "@/app/ui";
+import { Button, Card, Pill } from "@/app/ui";
+import { refreshSigning } from "@/db/signings";
 import { ReissueLink } from "./reissue";
 
 export const dynamic = "force-dynamic";
+
+const SIGNED_AT = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "long",
+  timeStyle: "short",
+});
 
 export default async function DealReview({
   params,
@@ -29,6 +35,10 @@ export default async function DealReview({
   const p = progress(answers);
   const queue = agentQueue(answers);
   const deferred = deferredQuestions(answers);
+  // Reconciled against DocuSeal, not just read back. The agent is the person
+  // who gets asked "did it go through?", and a page that only knows what a
+  // webhook told it will confidently say no when the answer is yes.
+  const signature = await refreshSigning(deal.id);
 
   return (
     <>
@@ -42,12 +52,73 @@ export default async function DealReview({
           <p className="mt-1 text-ink-muted">{deal.propertyAddress}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Pill tone={p.overallPercent === 100 ? "positive" : "brand"}>
-            {p.overallPercent}% complete
-          </Pill>
+          {signature.state === "signed" ? (
+            <Pill tone="positive">
+              <span aria-hidden="true">&#10003;</span> Signed
+            </Pill>
+          ) : (
+            <Pill tone={p.overallPercent === 100 ? "positive" : "brand"}>
+              {p.overallPercent}% complete
+            </Pill>
+          )}
           <ReissueLink dealId={deal.id} />
         </div>
       </div>
+
+      {/*
+        The signature. The only thing on this page that is a fact about the
+        outside world rather than a projection of the answer set — so it says
+        where the document actually is, and links to the executed PDF rather
+        than describing one.
+      */}
+      <Card tone={signature.changeRequest ? "attention" : "plain"} className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="font-medium">
+              {signature.state === "signed"
+                ? "Seller has signed"
+                : signature.state === "awaiting_signature"
+                  ? "Waiting on the seller's signature"
+                  : "Not sent for signature yet"}
+            </p>
+            <p className="mt-1 text-sm text-ink-muted">
+              {signature.state === "signed" && signature.signedAt
+                ? `${SIGNED_AT.format(signature.signedAt)}. You countersign in DocuSeal; the seller's answers are locked.`
+                : signature.state === "awaiting_signature"
+                  ? "They've opened the form. Nothing to do until they finish."
+                  : !signature.configured
+                    ? "DocuSeal isn't configured on this deployment."
+                    : "The seller signs at the end of their interview."}
+            </p>
+          </div>
+          {signature.state === "signed" && (
+            <Button
+              size="md"
+              variant="secondary"
+              href={`/api/agent/deals/${deal.id}/document`}
+              download
+            >
+              Download the signed PDF
+            </Button>
+          )}
+        </div>
+
+        {signature.changeRequest && (
+          <div className="mt-4 border-t border-attention-line pt-4">
+            <p className="font-medium">The seller wants to change something.</p>
+            {signature.changeRequest.note && (
+              <p className="mt-2 text-sm italic text-ink-muted">
+                &ldquo;{signature.changeRequest.note}&rdquo;
+              </p>
+            )}
+            <p className="mt-2 text-sm text-ink-muted">
+              Asked {SIGNED_AT.format(signature.changeRequest.at)}. A signed
+              disclosure is not editable &mdash; send a fresh link above and
+              they&rsquo;ll sign a corrected one. This clears when you do.
+            </p>
+          </div>
+        )}
+      </Card>
 
       {/* What the agent actually has to act on, before the full transcript. */}
       <div className="mt-6 grid gap-3 sm:grid-cols-3">

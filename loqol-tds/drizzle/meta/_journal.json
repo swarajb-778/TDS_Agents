@@ -15,6 +15,20 @@
       "when": 1787290899454,
       "tag": "0001_conflict_acknowledgements",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787343607105,
+      "tag": "0002_agent_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787344222928,
+      "tag": "0003_signings",
+      "breakpoints": true
     }
   ]
 }

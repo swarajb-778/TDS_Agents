@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Field, inputClass } from "@/app/ui";
+import { AuthShell, FormError } from "../auth-shell";
 
 export default function AgentLogin() {
   const router = useRouter();
@@ -37,19 +39,22 @@ export default function AgentLogin() {
   }
 
   return (
-    <main id="main" className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-12">
-      <p className="text-sm font-semibold tracking-wide text-brand-strong uppercase">Loqol</p>
-      <h1 className="mt-2 text-2xl font-semibold">Agent sign in</h1>
-      <p className="mt-2 text-ink-muted">
-        Sellers don&rsquo;t sign in &mdash; they use the link you send them.
-      </p>
-
+    <AuthShell
+      title="Agent sign in"
+      lead={
+        <>Sellers don&rsquo;t sign in &mdash; they use the link you send them.</>
+      }
+      footer={
+        <>
+          New here?{" "}
+          <Link href="/agent/signup" className="font-medium text-brand-strong underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
       <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
-        {error && (
-          <p role="alert" className="rounded-control bg-danger-surface px-3 py-2 text-sm font-medium text-danger">
-            {error}
-          </p>
-        )}
+        {error && <FormError>{error}</FormError>}
 
         <Field label="Email" htmlFor="email" required>
           <input
@@ -76,7 +81,21 @@ export default function AgentLogin() {
         <Button type="submit" full busy={busy}>
           {busy ? "Signing in" : "Sign in"}
         </Button>
+
+        {/*
+          Below the button, not beside the password field: a forgotten password
+          is the exception, and putting the escape hatch in the tab order before
+          the primary action makes every normal sign-in walk past it.
+        */}
+        <p className="text-center text-sm">
+          <Link
+            href="/agent/forgot-password"
+            className="font-medium text-brand-strong underline"
+          >
+            Forgot your password?
+          </Link>
+        </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }

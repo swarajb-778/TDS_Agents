@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { resolveSellerToken } from "@/db/requests";
+import { sellerForMutation } from "@/db/seller-guard";
 import { loadAnswers, writeAnswer, type Actor } from "@/db/answers";
 import { nextQuestion, progress, resolveQuestion } from "@/tds/flow";
 import { conflictsFor } from "@/tds/conflicts";
@@ -58,29 +58,27 @@ function whatNext(answers: AnswerMap, currentId?: string): Partial<ToolResult> {
   };
 }
 
-export async function POST(request: Request) {
-  let body: { token?: unknown; name?: unknown; args?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, reason: "Malformed request." }, { status: 400 });
-  }
-  if (typeof body.token !== "string" || typeof body.name !== "string") {
-    return NextResponse.json({ ok: false, reason: "Malformed request." }, { status: 400 });
-  }
-
-  const session = await resolveSellerToken(body.token);
-  if (!session) {
-    return NextResponse.json({ ok: false, reason: "This link is no longer valid." }, { status: 401 });
-  }
-
-  const args = (body.args ?? {}) as Record<string, unknown>;
+/**
+ * Execute one tool call for an already-identified seller.
+ *
+ * Split from the route on purpose. Everything above this line is "which
+ * disclosure is this", which needs a request; everything below is "what does
+ * this tool do", which does not. Keeping them apart is what lets
+ * scripts/voice-check.ts exercise the real contract without a server, a cookie,
+ * or a browser.
+ */
+export async function runVoiceTool(
+  session: { dealId: string; requestId: string },
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const body = { name };
   const questionId = typeof args.question_id === "string" ? args.question_id : "";
   const actor: Actor = { type: "seller", id: session.requestId };
   const dealId = session.dealId;
 
   if (!resolveQuestion(questionId)) {
-    return NextResponse.json({ ok: false, reason: `Unknown question: ${questionId}` });
+    return { ok: false, reason: `Unknown question: ${questionId}` };
   }
 
   const write = (extra: Parameters<typeof writeAnswer>[0]) => writeAnswer(extra);
@@ -174,5 +172,31 @@ export async function POST(request: Request) {
       result = { ok: false, reason: `Unknown tool: ${String(body.name)}` };
   }
 
+  return result;
+}
+
+export async function POST(request: Request) {
+  let body: { name?: unknown; args?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, reason: "Malformed request." }, { status: 400 });
+  }
+  if (typeof body.name !== "string") {
+    return NextResponse.json({ ok: false, reason: "Malformed request." }, { status: 400 });
+  }
+
+  // The deal is the cookie's, not the model's. Nothing the voice agent can say
+  // names a disclosure.
+  const auth = await sellerForMutation();
+  if (!auth.ok) {
+    return NextResponse.json({ ok: false, reason: auth.error }, { status: auth.status });
+  }
+
+  const result = await runVoiceTool(
+    auth.session,
+    body.name,
+    (body.args ?? {}) as Record<string, unknown>,
+  );
   return NextResponse.json(result);
 }
