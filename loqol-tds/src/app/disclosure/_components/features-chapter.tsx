@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { getChapter, groupsInChapter } from "@/tds/registry";
-import { isVisible } from "@/tds/flow";
+import { isVisible, resolveQuestion } from "@/tds/flow";
 import {
   firstIncompleteGroup,
   isPresenceChip,
@@ -10,7 +10,9 @@ import {
   questionsInGroup,
 } from "@/tds/form-view";
 import type { AnswerMap, AnswerStatus, AnswerValue } from "@/tds/types";
+import { Pill } from "@/app/ui";
 import { QuestionControl } from "./question-control";
+import { useFocusQuestion } from "./use-focus-question";
 
 const CHAPTER = "features" as const;
 
@@ -34,9 +36,30 @@ function withAnswer(
 
 const inGroup = (group: string) => questionsInGroup(CHAPTER, group);
 
+/**
+ * Which room to open on.
+ *
+ * The chapter is paginated by room, so restoring the seller's place means
+ * picking the room first — landing on the right chapter and then making them
+ * page through eleven rooms to find the fire alarm is not restoring anything.
+ * Anything that does not resolve to a room falls back to the derived position,
+ * which is what this always did.
+ */
+function openingGroup(
+  focusQuestionId: string | null | undefined,
+  answers: AnswerMap,
+): number {
+  const groups = groupsInChapter(CHAPTER);
+  const focused = focusQuestionId ? resolveQuestion(focusQuestionId) : undefined;
+  const at = focused?.group ? groups.indexOf(focused.group) : -1;
+  return at === -1 ? firstIncompleteGroup(CHAPTER, answers) : at;
+}
+
 interface Props {
   sellerName: string;
   initialAnswers: AnswerMap;
+  /** The question the seller was on when they left the other path. */
+  focusQuestionId?: string | null;
   /** Chapter finished — the flow re-derives where the seller goes next. */
   onChapterDone?: () => void;
   /** Hand the fresh map back so the other path never re-asks. */
@@ -48,13 +71,17 @@ interface Props {
 export function FeaturesChapter({
   sellerName,
   initialAnswers,
+  focusQuestionId,
   onChapterDone,
   onWrote,
   onSwitchToVoice,
 }: Props) {
   const [answers, setAnswers] = useState<AnswerMap>(initialAnswers);
-  const [index, setIndex] = useState(() => firstIncompleteGroup(CHAPTER, initialAnswers));
+  const [index, setIndex] = useState(() =>
+    openingGroup(focusQuestionId, initialAnswers),
+  );
   const [unsaved, setUnsaved] = useState(false);
+  const { spotlight, target, clear } = useFocusQuestion(focusQuestionId);
 
   const groups = groupsInChapter(CHAPTER);
   const chapter = getChapter(CHAPTER)!;
@@ -67,6 +94,11 @@ export function FeaturesChapter({
   const chips = visible.filter(isPresenceChip);
   const controls = visible.filter((q) => !isPresenceChip(q));
   const openControls = controls.filter((q) => !answers[q.id]);
+  /** The question being pointed at, but only while the seller is in its room. */
+  const spotlit =
+    spotlight && visible.some((q) => q.id === spotlight)
+      ? resolveQuestion(spotlight)
+      : undefined;
 
   async function save(
     entries: Array<{ questionId: string; value: AnswerValue; status?: AnswerStatus }>,
@@ -94,6 +126,7 @@ export function FeaturesChapter({
     value: AnswerValue,
     status: AnswerStatus = "answered",
   ) {
+    clear(questionId);
     setAnswers((prev) => withAnswer(prev, questionId, value, status));
     void save([{ questionId, value, status }]);
   }
@@ -203,21 +236,34 @@ export function FeaturesChapter({
         <h1 className="text-2xl font-semibold text-ink">{group}</h1>
         <p className="mt-1 text-ink-muted">Tap everything your home has.</p>
 
+        {/* Named, not just ringed. A seller who cannot separate teal from grey
+            still needs to know which of eleven chips they were on. */}
+        {spotlit && (
+          <p className="mt-4">
+            <Pill tone="brand">
+              Where we left off: {spotlit.sellerLabel ?? spotlit.label}
+            </Pill>
+          </p>
+        )}
+
         {chips.length > 0 && (
           <div className="mt-5 flex flex-wrap gap-2">
             {chips.map((q) => {
               const on = answers[q.id]?.value === true;
+              const here = q.id === spotlight;
               return (
                 <button
                   key={q.id}
                   type="button"
+                  ref={here ? target : undefined}
                   onClick={() => record(q.id, !on)}
                   aria-pressed={on}
+                  aria-current={here ? "step" : undefined}
                   className={`min-h-12 rounded-full border-2 px-4 text-base font-medium transition-colors ${
                     on
                       ? "border-brand bg-brand text-on-brand"
                       : "border-line-strong bg-surface text-ink active:bg-surface-sunken"
-                  }`}
+                  } ${here ? "ring-2 ring-brand ring-offset-2 ring-offset-canvas" : ""}`}
                 >
                   {on && <span aria-hidden="true">✓ </span>}
                   {q.sellerLabel ?? q.label}
@@ -229,16 +275,26 @@ export function FeaturesChapter({
 
         {controls.length > 0 && (
           <div className="mt-6 space-y-3">
-            {controls.map((q) => (
-              <QuestionControl
-                key={q.id}
-                question={q}
-                answer={answers[q.id]}
-                answers={answers}
-                onChange={(value, status) => record(q.id, value, status ?? "answered")}
-                onVoice={() => onSwitchToVoice?.()}
-              />
-            ))}
+            {controls.map((q) => {
+              const here = q.id === spotlight;
+              return (
+                <div
+                  key={q.id}
+                  ref={here ? target : undefined}
+                  tabIndex={here ? -1 : undefined}
+                  aria-current={here ? "step" : undefined}
+                >
+                  <QuestionControl
+                    question={q}
+                    answer={answers[q.id]}
+                    answers={answers}
+                    onChange={(value, status) => record(q.id, value, status ?? "answered")}
+                    onVoice={() => onSwitchToVoice?.()}
+                    highlighted={here}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 

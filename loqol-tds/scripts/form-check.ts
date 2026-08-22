@@ -4,7 +4,12 @@
 
 import assert from "node:assert/strict";
 import { QUESTIONS, groupsInChapter, questionsInChapter, getQuestion } from "../src/tds/registry";
-import { firstIncompleteGroup, isPresenceChip, questionsInGroup } from "../src/tds/form-view";
+import {
+  firstIncompleteGroup,
+  focusableQuestion,
+  isPresenceChip,
+  questionsInGroup,
+} from "../src/tds/form-view";
 import { deferredQuestions, inDeferralPass, makeAnswer, nextQuestion } from "../src/tds/flow";
 import {
   composeExplanations,
@@ -72,6 +77,68 @@ assert.equal(
   `an open follow-up should be collected once chips are done, landed on ${groups[landing]}`,
 );
 console.log("✓ open follow-ups are collected, not skipped");
+
+// The `?q=` handoff. A seller who has just said "yes, there's a fire alarm" and
+// asked for the buttons must land on the fire alarm, not at the top of a
+// fifty-question chapter — and every way that can go wrong has to be a quiet
+// no-op, because "your link is invalid" is where a seller at 10pm stops.
+{
+  assert.equal(
+    focusableQuestion("features", "A.fire_alarm", {}),
+    "A.fire_alarm",
+    "the question the seller was on must be pointable-at",
+  );
+
+  // Nothing that would not be on screen anyway.
+  assert.equal(focusableQuestion("features", "A.no_such_thing", {}), null, "unknown id");
+  assert.equal(focusableQuestion("features", "", {}), null, "empty id");
+  assert.equal(focusableQuestion("features", null, {}), null, "absent id");
+  assert.equal(
+    focusableQuestion("features", "C.7", {}),
+    null,
+    "a question belonging to another chapter is not this chapter's business",
+  );
+  assert.equal(
+    focusableQuestion("confirm", "meta.county", {}),
+    null,
+    "the listing agent's own fields are never shown to the seller",
+  );
+
+  // A gate that has since closed is the realistic stale case: the seller
+  // changed an answer, the follow-up went away, the link in their pocket did
+  // not. It must degrade to the top of the chapter, never to an error.
+  assert.equal(
+    focusableQuestion("features", "A.fireplace_location", {}),
+    null,
+    "a question whose gate is shut is not on screen to point at",
+  );
+  assert.equal(
+    focusableQuestion("features", "A.fireplace_location", {
+      "A.fireplace": makeAnswer("A.fireplace", true, "voice"),
+    }),
+    "A.fireplace_location",
+    "and is pointable-at once the gate opens",
+  );
+
+  // Follow-ups are synthesised, not stored, and voice hands them back by id
+  // constantly — "tell me more about that" is most of the voice path.
+  const said: AnswerMap = {
+    "A.not_operating": makeAnswer("A.not_operating", true, "voice"),
+  };
+  assert.equal(
+    focusableQuestion("condition", "A.not_operating.explanation", said),
+    "A.not_operating.explanation",
+    "a follow-up must survive the handoff — it is what voice was mid-sentence on",
+  );
+  assert.equal(
+    focusableQuestion("condition", "A.not_operating.explanation", {}),
+    null,
+    "but not before its parent has been answered",
+  );
+
+  console.log("✓ the ?q= handoff points at real questions and shrugs off stale ones");
+}
+
 console.log("form checks passed\n");
 
 // "Come back to this" has to mean something. A skipped question must not be

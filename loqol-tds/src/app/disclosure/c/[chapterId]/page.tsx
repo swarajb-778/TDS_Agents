@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { CHAPTERS } from "@/tds/registry";
 import { questionsInChapter } from "@/tds/registry";
 import { isVisible } from "@/tds/flow";
+import { focusableQuestion } from "@/tds/form-view";
 import type { ChapterId, Modality } from "@/tds/types";
 import { ChapterScreen } from "@/app/disclosure/_components/chapter-screen";
 import { sellerScreen } from "../../session";
@@ -26,9 +27,9 @@ export default async function Chapter({
   searchParams,
 }: {
   params: Promise<{ chapterId: string }>;
-  searchParams: Promise<{ mode?: string }>;
+  searchParams: Promise<{ mode?: string; q?: string }>;
 }) {
-  const [{ chapterId }, { mode }] = await Promise.all([params, searchParams]);
+  const [{ chapterId }, { mode, q }] = await Promise.all([params, searchParams]);
   const screen = await sellerScreen();
 
   if (screen.submittedAt) redirect("/disclosure");
@@ -53,12 +54,25 @@ export default async function Chapter({
     visible[0].defaultModality === "voice" ? "voice" : "form";
   const modality = fromUrl ?? screen.modality ?? suggested;
 
+  /*
+   * `?q=` is the other half of the handoff: which question the seller was on
+   * when they left the other path. It is a view hint and nothing more — it
+   * never enters the queue, and an id that no longer means anything resolves to
+   * null rather than to an error page.
+   */
+  const focus = focusableQuestion(
+    chapterId,
+    typeof q === "string" ? q : null,
+    screen.answers,
+  );
+
   return (
     <ChapterScreen
       chapter={chapterId}
       modality={modality}
       sellerName={screen.sellerName}
       initialAnswers={screen.answers}
+      focusQuestionId={focus}
     />
   );
 }

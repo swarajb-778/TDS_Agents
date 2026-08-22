@@ -38,6 +38,15 @@ interface Finished {
 
 interface Props {
   chapter: ChapterId;
+  /**
+   * Hand over to the on-screen version, naming the question being discussed.
+   *
+   * The id is the seller's *place*, not their position in the queue — the form
+   * scrolls there and marks it, and flow.ts still decides what actually gets
+   * asked. An empty string is a legitimate answer to "which question": the call
+   * may have dropped before the first one arrived, and the form opens at the
+   * top rather than refusing to open.
+   */
   onSwitchToForm: (questionId: string) => void;
   /**
    * This chapter's conversation is over — pull the answers back and move on.
@@ -77,6 +86,16 @@ export function VoiceChapter({ chapter, onSwitchToForm, onAdvance }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
   const turnRef = useRef<TurnState>(INITIAL_TURN);
+  /**
+   * What the conversation is on right now, as the server last reported it.
+   *
+   * A ref rather than state: nothing renders from it, and re-rendering this
+   * component on every tool call is exactly the class of change that has torn
+   * down a live call before. It exists so that "just show me the buttons" can
+   * say *which* question, instead of dumping the seller at the top of a chapter
+   * they were fifty questions into.
+   */
+  const onQuestion = useRef<string>("");
 
   const say = useCallback((who: Line["who"], text: string) => {
     if (!text.trim()) return;
@@ -159,6 +178,13 @@ export function VoiceChapter({ chapter, onSwitchToForm, onAdvance }: Props) {
         result = { ok: false, reason: "Could not reach the server. Ask again in a moment." };
       }
 
+      // The server names what comes next, on every tool result — including a
+      // rejected write, which names the question again so the agent re-asks it.
+      // Following it here keeps the handoff pointing at the live question.
+      if (typeof result.next_question_id === "string" && result.next_question_id) {
+        onQuestion.current = result.next_question_id;
+      }
+
       if (typeof result.recorded === "string") setRecorded((p) => [...p, result.recorded as string]);
       if (typeof result.progress === "string") setProgressLabel(result.progress);
       if (result.ok === false && typeof result.reason === "string") {
@@ -177,9 +203,13 @@ export function VoiceChapter({ chapter, onSwitchToForm, onAdvance }: Props) {
         // Settle first, then stand down: tool.settled would otherwise re-raise
         // the want this clears. The agent gets its one goodbye and no more.
         dispatch({ type: "reply.abandoned" });
+        // The model names the question it was on; the server's own answer is
+        // the fallback, because a model that forgot to name one must not cost
+        // the seller their place.
+        const place = (result.hand_off_to_form as string) || onQuestion.current;
         setTimeout(() => {
           stop();
-          onSwitchToForm(result.hand_off_to_form as string);
+          onSwitchToForm(place);
         }, 900);
         return;
       }
@@ -224,6 +254,11 @@ export function VoiceChapter({ chapter, onSwitchToForm, onAdvance }: Props) {
       if (!res.ok) throw new Error((await res.json()).error ?? "Could not start.");
       const session = await res.json();
       setProgressLabel(session.progressLabel ?? null);
+      // Where the conversation opens, so a seller who bails out in the first
+      // ten seconds still lands on the question they were just asked.
+      if (typeof session.firstQuestionId === "string") {
+        onQuestion.current = session.firstQuestionId;
+      }
 
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
@@ -443,7 +478,10 @@ export function VoiceChapter({ chapter, onSwitchToForm, onAdvance }: Props) {
                 onClick={() => {
                   stop();
                   setStatus("ended");
-                  onSwitchToForm("");
+                  // Carry the question over. Tapping this used to land the
+                  // seller at the top of the chapter, which in a fifty-question
+                  // one is barely better than starting again.
+                  onSwitchToForm(onQuestion.current);
                 }}
               >
                 Just show me the buttons

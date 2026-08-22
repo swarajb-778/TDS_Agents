@@ -194,6 +194,56 @@ export function nextQuestion(
 }
 
 /**
+ * The next question *inside one chapter*, optionally narrowed further.
+ *
+ * nextQuestion() answers "where is the seller in the whole form". A voice
+ * session answers a smaller question: it covers one part, it is briefed on
+ * that part only, and it must not be handed anything else. Those are not the
+ * same query, and using the global one for a voice session goes wrong two
+ * ways: with an earlier chapter unfinished it points backwards, so the part
+ * ends after a single answer; and with a form-only question next it asks a
+ * sixteen-way checkbox grid out loud.
+ *
+ * `accept` is how a caller says what it can actually ask. A rejected question
+ * is stepped over, never blocked on — the global queue still has it, and the
+ * seller reaches it on the path that suits it.
+ *
+ * Returns null when this chapter has nothing left for this caller.
+ */
+export function nextInChapter(
+  answers: AnswerMap,
+  chapter: ChapterId,
+  currentId?: string,
+  accept: (q: Question) => boolean = () => true,
+): Question | null {
+  const current = currentId ? resolveQuestion(currentId) : undefined;
+
+  // Same rule as nextQuestion: the follow-up to what was just answered comes
+  // first, while the seller still has the thing in their head.
+  if (current && current.chapter === chapter && followUpDue(current, answers)) {
+    const fu = synthesiseFollowUp(current)!;
+    if (accept(fu)) return fu;
+  }
+
+  const queue = visibleQuestions(answers).filter((q) => q.chapter === chapter);
+
+  for (const q of queue) {
+    if (followUpDue(q, answers)) {
+      const fu = synthesiseFollowUp(q)!;
+      if (accept(fu)) return fu;
+    }
+    const a = answers[q.id];
+    if ((!a || a.status === "unanswered") && accept(q)) return q;
+  }
+
+  for (const q of queue) {
+    if (answers[q.id]?.status === "skipped" && accept(q)) return q;
+  }
+
+  return null;
+}
+
+/**
  * Skipped questions come back at the end rather than blocking. "Come back to it"
  * has to actually mean something or sellers stop trusting the button.
  */
@@ -223,10 +273,21 @@ export function inDeferralPass(answers: AnswerMap): boolean {
 
 /** Everything the agent needs to chase — the "I don't know" queue. */
 export function agentQueue(answers: AnswerMap): Question[] {
-  return visibleQuestions(answers).filter((q) => {
-    const s = answers[q.id]?.status;
+  const chase = (id: string) => {
+    const s = answers[id]?.status;
     return s === "unknown" || s === "flagged_for_agent";
-  });
+  };
+  const out: Question[] = [];
+  for (const q of visibleQuestions(answers)) {
+    if (chase(q.id)) out.push(q);
+    // An explanation the seller could not give is exactly the thing the agent
+    // has to chase: the yes is on the form and the box under it is empty.
+    // Follow-ups are synthesised, so filtering QUESTIONS alone loses them
+    // silently — the seller is told it goes to their agent and it does not.
+    const fu = synthesiseFollowUp(q);
+    if (fu && isVisible(fu, answers) && chase(fu.id)) out.push(fu);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

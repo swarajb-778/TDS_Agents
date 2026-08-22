@@ -10,8 +10,9 @@
 import { NextResponse } from "next/server";
 import { sellerForMutation } from "@/db/seller-guard";
 import { loadAnswers, writeAnswer, type Actor } from "@/db/answers";
-import { nextQuestion, progress, resolveQuestion } from "@/tds/flow";
+import { nextInChapter, nextQuestion, progress, resolveQuestion } from "@/tds/flow";
 import { conflictsFor } from "@/tds/conflicts";
+import { canAskAloud } from "@/tds/voice";
 import type { AnswerMap, AnswerValue } from "@/tds/types";
 
 interface ToolResult {
@@ -24,9 +25,12 @@ interface ToolResult {
   /** Which chapter that question belongs to, and whether it is a new one. */
   next_chapter?: string | null;
   /**
-   * True when the next question sits outside the chapter being talked through.
-   * The client shows an explicit way onward rather than trusting the agent to
-   * announce it — and the agent has no brief for the next chapter anyway.
+   * True when there is nothing left here to ask out loud — either the next
+   * question is in another chapter, or it is one this chapter keeps on screen
+   * (a checkbox grid, a drafted paragraph to read over). Either way the seller
+   * is being handed to the screen, so the client shows an explicit way onward
+   * rather than trusting the agent to announce it. `next_chapter` names where
+   * the next question actually lives, which may still be this one.
    */
   entering_chapter?: boolean;
   /** Surfaced conversationally, never as a correction. */
@@ -37,9 +41,43 @@ interface ToolResult {
   hand_off_to_form?: string;
 }
 
+/**
+ * What the agent asks next — scoped to the part of the form it is on.
+ *
+ * The session does not carry a chapter, so it is taken from the question just
+ * answered. That matters: asked globally, nextQuestion() returns wherever the
+ * seller is in the *whole* form, and for a voice session that is the wrong
+ * answer twice over. If an earlier chapter is unfinished it points backwards,
+ * so `entering_chapter` fires after a single answer and the client tells a
+ * seller who has answered one of sixteen questions that this part is done. And
+ * where the next question is a screen job — a sixteen-way checkbox grid, a
+ * drafted paragraph to read over — it hands it to the agent to ask out loud.
+ *
+ * When the part really is over, `next_prompt` comes back null. That is the
+ * contract the brief already states: empty prompt plus `entering_chapter` or
+ * `done` means stop talking, because there is a button on screen for what
+ * comes next and the agent has not been briefed on it.
+ */
 function whatNext(answers: AnswerMap, currentId?: string): Partial<ToolResult> {
-  const next = nextQuestion(answers, currentId);
-  if (next.done || !next.question) {
+  const current = currentId ? resolveQuestion(currentId) : undefined;
+  const q = current
+    ? nextInChapter(answers, current.chapter, currentId, canAskAloud)
+    : null;
+
+  if (q) {
+    return {
+      next_question_id: q.id,
+      next_prompt: q.voicePrompt ?? q.sellerLabel ?? q.label,
+      next_chapter: current!.chapter,
+      entering_chapter: false,
+      done: false,
+    };
+  }
+
+  // Nothing left here that can be asked out loud. Where the seller goes next is
+  // the screen's decision; the agent only says where they have got to.
+  const onward = nextQuestion(answers, currentId);
+  if (onward.done || !onward.question) {
     return {
       next_question_id: null,
       next_prompt: null,
@@ -48,12 +86,11 @@ function whatNext(answers: AnswerMap, currentId?: string): Partial<ToolResult> {
       done: true,
     };
   }
-  const q = next.question;
   return {
-    next_question_id: q.id,
-    next_prompt: q.voicePrompt ?? q.sellerLabel ?? q.label,
-    next_chapter: next.chapter,
-    entering_chapter: next.enteringChapter,
+    next_question_id: onward.question.id,
+    next_prompt: null,
+    next_chapter: onward.chapter,
+    entering_chapter: true,
     done: false,
   };
 }
@@ -77,7 +114,15 @@ export async function runVoiceTool(
   const actor: Actor = { type: "seller", id: session.requestId };
   const dealId = session.dealId;
 
-  if (!resolveQuestion(questionId)) {
+  /*
+   * A write needs a real question. Changing input method does not — and must
+   * not be refused for want of one. The model sometimes calls switch_to_form
+   * with no question_id at all, and a seller who has just said "can I please
+   * just tap this" is the last person who should be told the request was
+   * invalid and asked again. The id it carries is a bookmark for the form; a
+   * missing or stale one costs the seller their place, never the handoff.
+   */
+  if (body.name !== "switch_to_form" && !resolveQuestion(questionId)) {
     return { ok: false, reason: `Unknown question: ${questionId}` };
   }
 
@@ -86,12 +131,34 @@ export async function runVoiceTool(
 
   switch (body.name) {
     case "record_answer": {
+      /*
+       * No confidence is not high confidence.
+       *
+       * validateAnswer() only applies the threshold to a number it is given, so
+       * a model that omits the field — or sends "0.4" as a string, which some
+       * do — walks an unmeasured answer straight past the one gate that stops a
+       * guess, and lands it in the audit trail with a null confidence beside
+       * it. On a document signed under penalty that is the wrong default. Ask
+       * again instead.
+       */
+      const confidence =
+        typeof args.confidence === "number" && Number.isFinite(args.confidence)
+          ? args.confidence
+          : undefined;
+      if (confidence === undefined) {
+        result = {
+          ok: false,
+          reason: "No confidence given — ask again and say how sure you are.",
+          next_question_id: questionId,
+        };
+        break;
+      }
       const outcome = await write({
         dealId,
         questionId,
         value: args.value as AnswerValue,
         source: "voice",
-        confidence: typeof args.confidence === "number" ? args.confidence : undefined,
+        confidence,
         verbatim: typeof args.verbatim === "string" ? args.verbatim : undefined,
         actor,
       });
@@ -114,10 +181,26 @@ export async function runVoiceTool(
     }
 
     case "record_explanation": {
+      /*
+       * An empty explanation is worse than no explanation. It sets the
+       * follow-up to "answered", so flow.ts stops asking for it, and the
+       * composed box on the PDF prints blank next to a yes the seller signed.
+       * The registry's type check passes "" as valid long_text, so it has to be
+       * caught here.
+       */
+      const text = typeof args.text === "string" ? args.text : "";
+      if (!text.trim()) {
+        result = {
+          ok: false,
+          reason: "Nothing to write down — ask them to say a little more about it.",
+          next_question_id: questionId,
+        };
+        break;
+      }
       const outcome = await write({
         dealId,
         questionId,
-        value: typeof args.text === "string" ? args.text : "",
+        value: text,
         source: "voice",
         verbatim: typeof args.verbatim === "string" ? args.verbatim : undefined,
         actor,
@@ -160,9 +243,12 @@ export async function runVoiceTool(
 
     case "switch_to_form": {
       // Nothing is written. The seller changed input method, not their mind.
+      // The id is passed on only if it names something real, so the client can
+      // fall back to the question the server last handed out rather than
+      // sending the form looking for a question that does not exist.
       result = {
         ok: true,
-        hand_off_to_form: questionId,
+        hand_off_to_form: resolveQuestion(questionId) ? questionId : "",
         recorded: "Handing over to the on-screen version. Say goodbye briefly and stop talking.",
       };
       break;

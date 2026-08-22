@@ -10,8 +10,51 @@
  */
 
 import { getChapter, questionsInChapter } from "./registry";
-import { followUpId, isVisible, voiceToolSchemas } from "./flow";
+import { followUpId, nextInChapter, voiceToolSchemas } from "./flow";
 import type { AnswerMap, ChapterId, Question } from "./types";
+
+/**
+ * Can this question be asked out loud at all?
+ *
+ * Two kinds cannot, and both read as bugs to a seller rather than as design.
+ *
+ * A composed box — B.explain, C.explain, A.not_operating_describe — holds no
+ * answer of its own. It is assembled from the per-question explanations the
+ * agent has already collected, and its wording is a near copy of the follow-up
+ * that filled it. Asked aloud it is the same question twice in a row, the
+ * second time immediately after the seller answered it.
+ *
+ * A question the registry sends to the form is a screen job for a reason:
+ * B.components is sixteen checkboxes the seller is meant to watch tick, and
+ * B.explain is a drafted paragraph to read over. Reading either out is not the
+ * same question.
+ */
+/** A grid big enough that the seller should watch it tick, not hear it read. */
+const TOO_MANY_TO_SPEAK = 4;
+
+export function canAskAloud(q: Question): boolean {
+  /*
+   * Whether a question can be *conducted* by voice — which is not the same
+   * question as `defaultModality`, and conflating the two costs the seller the
+   * escape hatch. defaultModality says where they LAND; every form question
+   * still carries a mic affordance, and taking it must lead somewhere.
+   *
+   * Two things genuinely cannot be spoken. A composed box is a drafted
+   * paragraph the seller reads back and edits — reading it aloud is not the
+   * interaction. And a long multi-select is the documented hybrid: sixteen
+   * components the seller should see tick and be able to untick one of, rather
+   * than hold in their head from a list read out at them.
+   *
+   * A presence chip is neither. "Do you have a fire alarm?" is a perfectly good
+   * spoken question — just a slow way to ask forty of them, which is why the
+   * form is the default and not the only option.
+   */
+  if (q.docuseal.kind === "composed") return false;
+  if (q.type === "multi_enum" && (q.options?.length ?? 0) > TOO_MANY_TO_SPEAK) {
+    return false;
+  }
+  return true;
+}
 
 /** One question, as the agent needs to understand it. */
 function brief(q: Question, answers: AnswerMap): string {
@@ -25,7 +68,22 @@ function brief(q: Question, answers: AnswerMap): string {
       existing.status === "answered"
         ? JSON.stringify(existing.value)
         : existing.status.replace(/_/g, " ");
-    return `${q.id}: ALREADY ANSWERED (${said}) — do not ask this again.`;
+    const done = [`${q.id}: ALREADY ANSWERED (${said}) — do not ask this again.`];
+    // ...with one exception. A yes tapped on screen still owes its explanation,
+    // and the server will hand that follow-up straight back. Without this line
+    // the agent is told the question is finished and then asked for something
+    // that appears nowhere on its brief.
+    if (
+      q.followUp &&
+      existing.status === "answered" &&
+      existing.value === q.followUp.when &&
+      (answers[followUpId(q.id)]?.status ?? "unanswered") === "unanswered"
+    ) {
+      done.push(
+        `  still owed: ${q.followUp.voicePrompt ?? q.followUp.prompt} -> record_explanation("${followUpId(q.id)}")`,
+      );
+    }
+    return done.join("\n");
   }
   const lines = [`${q.id}: ${q.sellerLabel ?? q.label}`];
   if (q.voicePrompt) lines.push(`  ask: ${q.voicePrompt}`);
@@ -66,13 +124,14 @@ export function voiceInstructions(
    * where is the seller in the whole form — and this session only covers one
    * part. Using the global next would point the agent at a question that is not
    * even on its brief.
+   *
+   * The same function the tool endpoint uses, for the same reason: the opening
+   * question and every question after it have to come from one queue. Scanning
+   * for the first unanswered question here instead skipped outstanding
+   * follow-ups, so a seller who tapped a yes on screen and came back to voice
+   * was opened on the wrong question and handed the explanation a turn later.
    */
-  const start = questionsInChapter(chapter)
-    .filter((q) => q.defaultModality !== "agent" && isVisible(q, answers))
-    .find((q) => {
-      const a = answers[q.id];
-      return !a || a.status === "unanswered";
-    });
+  const start = nextInChapter(answers, chapter, undefined, canAskAloud);
 
   return `You are helping ${sellerFirstName} fill in part of a California Transfer Disclosure Statement, out loud, over their phone or laptop. They are probably tired, they are not a lawyer, and they did not choose to do this. Be warm, brief, and unhurried.
 
@@ -164,7 +223,15 @@ export function realtimeTools() {
  * a turn detector that does not treat a cough as a sentence — but a filter
  * costs nothing and catches whatever gets through.
  */
-const HALLUCINATIONS = [
+/**
+ * Stock subtitle phrases. Long and specific enough that finding one anywhere in
+ * a turn means the turn is not speech.
+ *
+ * Written already normalised — the comparison strips punctuation and
+ * underscores first, so a needle carrying either can never match. "amara.org"
+ * and "blank_audio" both sat in this list unable to fire.
+ */
+const STOCK_PHRASES = [
   "thank you for watching",
   "thanks for watching",
   "thank you for your watching",
@@ -173,14 +240,21 @@ const HALLUCINATIONS = [
   "please subscribe",
   "subscribe to my channel",
   "like and subscribe",
-  "amara.org",
+  "amara org",
   "subtitles by",
-  "the end",
-  "blank_audio",
-  "silence",
-  "music",
-  "applause",
 ];
+
+/**
+ * Single words a transcriber emits for non-speech, matched only when they are
+ * the WHOLE turn.
+ *
+ * These were substring-matched, which is the same bug in the other direction:
+ * "we replaced the fence at the end of the driveway", "there's a music room
+ * over the garage" and "the pipes go quiet, then silence" were all dropped from
+ * the seller's own transcript. Losing a real sentence off a legal document to
+ * catch a stage direction is a bad trade.
+ */
+const NOISE_TOKENS = ["the end", "blank audio", "silence", "music", "applause"];
 
 /** Turns that are only filler, and cannot be an answer to anything. */
 const EMPTY_TURNS = ["thank you", "thanks", "bye", "bye bye", "goodbye", "you", "okay", "ok"];
@@ -190,11 +264,12 @@ export function isLikelyHallucination(transcript: string): boolean {
   if (!text) return true;
 
   // Punctuation, bracketed stage directions, or a lone stray character.
-  const words = text.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
+  const words = text.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
   if (!words) return true;
   if (/^[\[(].*[\])]$/.test(text)) return true;
 
-  if (HALLUCINATIONS.some((h) => words.includes(h))) return true;
+  if (STOCK_PHRASES.some((h) => words.includes(h))) return true;
+  if (NOISE_TOKENS.includes(words)) return true;
 
   // A bare "thank you" is not an answer to any question on this form. If the
   // seller really did say only that, they lose nothing by it not being shown.

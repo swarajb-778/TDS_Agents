@@ -57,6 +57,32 @@ export function firstIncompleteGroup(
   return byFollowUp === -1 ? groups.length : byFollowUp;
 }
 
+/**
+ * Resolve the `?q=` view hint against a chapter.
+ *
+ * `?q=` says where to *look*, never what to ask. Position is still derived from
+ * the answers by flow.ts; this only decides whether a chapter has something on
+ * screen worth pointing the seller at, and a null result is a normal outcome
+ * rather than an error.
+ *
+ * Everything a chapter would not render comes back null: an id nobody has ever
+ * heard of, a question belonging to a different chapter, one the listing agent
+ * fills, and one whose gate is currently shut. A link that has gone stale in a
+ * pocket lands the seller at the top of the chapter — exactly where they landed
+ * before any of this existed.
+ */
+export function focusableQuestion(
+  chapter: ChapterId,
+  questionId: string | null | undefined,
+  answers: AnswerMap,
+): string | null {
+  if (!questionId) return null;
+  const q = resolveQuestion(questionId);
+  if (!q || q.chapter !== chapter) return null;
+  if (q.defaultModality === "agent") return null;
+  return isVisible(q, answers) ? q.id : null;
+}
+
 /** Everything still open in a chapter — what the end-of-chapter screen owes the seller. */
 export function openQuestions(
   chapter: ChapterId,

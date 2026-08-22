@@ -6,7 +6,8 @@ import { isVisible, progress } from "@/tds/flow";
 import { conflictsFor } from "@/tds/conflicts";
 import type { AnswerMap, AnswerStatus, AnswerValue, ChapterId } from "@/tds/types";
 import { QuestionControl } from "./question-control";
-import { Button } from "@/app/ui";
+import { useFocusQuestion } from "./use-focus-question";
+import { Button, Pill } from "@/app/ui";
 
 /**
  * The plain form rendering of a chapter — one control per visible question.
@@ -18,6 +19,8 @@ import { Button } from "@/app/ui";
 interface Props {
   chapter: ChapterId;
   initialAnswers: AnswerMap;
+  /** The question the seller was on when they left the other path. */
+  focusQuestionId?: string | null;
   onSwitchToVoice?: () => void;
   /** Hand the fresh map back so the other path never re-asks. */
   onWrote?: (answers: AnswerMap) => void;
@@ -28,6 +31,7 @@ interface Props {
 export function QuestionList({
   chapter,
   initialAnswers,
+  focusQuestionId,
   onSwitchToVoice,
   onWrote,
   onAdvance,
@@ -36,6 +40,7 @@ export function QuestionList({
   const [unsaved, setUnsaved] = useState(false);
   /** Only ever about the question just touched — the rest waits for review. */
   const [lastTouched, setLastTouched] = useState<string | null>(null);
+  const { spotlight, target, clear } = useFocusQuestion(focusQuestionId);
 
   const meta = getChapter(chapter);
   const visible = questionsInChapter(chapter).filter((q) => isVisible(q, answers));
@@ -48,6 +53,7 @@ export function QuestionList({
     status: AnswerStatus = "answered",
   ) {
     setLastTouched(questionId);
+    clear(questionId);
     setAnswers((prev) => ({
       ...prev,
       [questionId]: {
@@ -102,17 +108,40 @@ export function QuestionList({
       )}
 
       <div className="mt-5 space-y-3">
-        {visible.map((q) => (
-          <QuestionControl
-            key={q.id}
-            question={q}
-            answer={answers[q.id]}
-            answers={answers}
-            onChange={(value, status) => record(q.id, value, status ?? "answered")}
-            onVoice={() => onSwitchToVoice?.()}
-            notes={q.id === lastTouched ? conflictsFor(q.id, answers).map((c) => c.message) : []}
-          />
-        ))}
+        {visible.map((q) => {
+          const here = q.id === spotlight;
+          return (
+            <div
+              key={q.id}
+              // Focusable only so the handoff can move the reading cursor here;
+              // never in the tab order, so it costs a keyboard seller nothing.
+              ref={here ? target : undefined}
+              tabIndex={here ? -1 : undefined}
+              aria-current={here ? "step" : undefined}
+            >
+              {/* Said out loud, because scrolling on its own is not an
+                  explanation for why the page starts halfway down. */}
+              {here && (
+                <p className="mb-2">
+                  <Pill tone="brand">Where we left off</Pill>
+                </p>
+              )}
+              <QuestionControl
+                question={q}
+                answer={answers[q.id]}
+                answers={answers}
+                onChange={(value, status) => record(q.id, value, status ?? "answered")}
+                onVoice={() => onSwitchToVoice?.()}
+                highlighted={here}
+                notes={
+                  q.id === lastTouched
+                    ? conflictsFor(q.id, answers).map((c) => c.message)
+                    : []
+                }
+              />
+            </div>
+          );
+        })}
       </div>
 
       {/*

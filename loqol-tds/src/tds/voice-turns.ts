@@ -35,6 +35,15 @@ export const NUDGE_AFTER_MS = 5_000;
 export interface TurnState {
   /** A response is open — the agent is thinking or speaking right now. */
   readonly active: boolean;
+  /**
+   * How we came to believe a response is open.
+   *
+   * "created" is fact — the server said so. "guessed" is inference from a
+   * rejection: something refused our create, so something else probably holds
+   * the floor. That inference can be wrong, and when it is, no response.done
+   * ever arrives to clear it.
+   */
+  readonly activeVia: "created" | "guessed" | null;
   /** Tool calls whose server round-trip has not come back yet. */
   readonly outstanding: readonly string[];
   /** We owe the seller a spoken reply and have not had one yet. */
@@ -69,6 +78,7 @@ export interface TurnStep {
 
 export const INITIAL_TURN: TurnState = {
   active: false,
+  activeVia: null,
   outstanding: [],
   wanted: false,
   askedAt: 0,
@@ -88,10 +98,10 @@ const ask = (state: TurnState, now: number): TurnStep => ({
 export function step(state: TurnState, event: TurnEvent, now = 0): TurnStep {
   switch (event.type) {
     case "response.created":
-      return hold({ ...state, active: true, wanted: false });
+      return hold({ ...state, active: true, activeVia: "created", wanted: false });
 
     case "response.done": {
-      const settled = { ...state, active: false };
+      const settled = { ...state, active: false, activeVia: null };
       return settled.wanted && settled.outstanding.length === 0
         ? ask(settled, now)
         : hold(settled);
@@ -100,7 +110,7 @@ export function step(state: TurnState, event: TurnEvent, now = 0): TurnStep {
     case "response.rejected":
       // Whatever we tried to start, something else holds the floor. Keep the
       // want; response.done will release it.
-      return hold({ ...state, active: true });
+      return hold({ ...state, active: true, activeVia: "guessed" });
 
     case "tool.called":
       return hold({ ...state, outstanding: [...state.outstanding, event.callId] });
@@ -121,15 +131,29 @@ export function step(state: TurnState, event: TurnEvent, now = 0): TurnStep {
         : ask(state, now);
 
     case "reply.abandoned":
-      return hold({ ...state, wanted: false });
+      // Standing down has to include whatever is still in the air. The client
+      // settles the handoff call and then abandons, but the model can make two
+      // calls in one response — and the second one settling would re-raise the
+      // want this just cleared, putting the agent back on the floor after the
+      // seller has already been handed to the form.
+      return hold({ ...state, wanted: false, outstanding: [] });
 
-    case "nudge":
-      return state.wanted &&
-        !state.active &&
-        state.outstanding.length === 0 &&
-        now - state.askedAt >= NUDGE_AFTER_MS
-        ? ask(state, now)
-        : hold(state);
+    case "nudge": {
+      if (!state.wanted || state.outstanding.length > 0) return hold(state);
+      if (now - state.askedAt < NUDGE_AFTER_MS) return hold(state);
+
+      /*
+       * A reply that is genuinely happening announced itself with
+       * response.created, and must never be interrupted. A merely *guessed* one
+       * did not — and if that guess was wrong, no response.done is coming, so
+       * `active` pins true forever: the nudge can never fire and isPending() is
+       * false, which is silence with not even a spinner. Past the nudge window
+       * the guess has outlived its usefulness. Drop it and ask.
+       */
+      if (state.active && state.activeVia === "created") return hold(state);
+      if (state.active) return ask({ ...state, active: false, activeVia: null }, now);
+      return ask(state, now);
+    }
   }
 }
 
@@ -165,7 +189,10 @@ export function replay(
  * waiting.
  */
 export function isPending(state: TurnState): boolean {
-  return state.outstanding.length > 0 || (state.wanted && !state.active);
+  return (
+    state.outstanding.length > 0 ||
+    (state.wanted && (!state.active || state.activeVia === "guessed"))
+  );
 }
 
 /** The Realtime error that means "you sent a create too early". */

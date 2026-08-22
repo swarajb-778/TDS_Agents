@@ -29,6 +29,11 @@ interface Props {
   onVoice: () => void;
   /** Contradictions touching this answer. Shown, never enforced. */
   notes?: string[];
+  /**
+   * This is the one the seller was just talking about. Brand, not amber —
+   * warm means "two of your answers disagree" here and nothing else.
+   */
+  highlighted?: boolean;
 }
 
 const CHOICE =
@@ -97,6 +102,7 @@ export function QuestionControl({
   onChange,
   onVoice,
   notes = [],
+  highlighted = false,
 }: Props) {
   const unsure = answer?.status === "unknown";
   const value = unsure ? null : answer?.value;
@@ -112,7 +118,15 @@ export function QuestionControl({
     draft !== null && !draft.value.trim() && !draft.composed.trim();
 
   return (
-    <div className="rounded-card border border-line bg-surface p-4">
+    <div
+      className={`rounded-card border p-4 ${
+        // Ring and border only. The card keeps its normal surface so every
+        // contrast pair contrast-check.ts asserts still holds inside it.
+        highlighted
+          ? "border-brand bg-surface ring-2 ring-brand"
+          : "border-line bg-surface"
+      }`}
+    >
       <p className="text-base font-medium text-ink">
         {/* "Here's everything you told me" over an empty box is a lie. When
             there is genuinely nothing to read back, say that instead. */}
