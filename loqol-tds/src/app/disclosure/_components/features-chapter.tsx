@@ -35,7 +35,6 @@ function withAnswer(
 const inGroup = (group: string) => questionsInGroup(CHAPTER, group);
 
 interface Props {
-  token: string;
   sellerName: string;
   initialAnswers: AnswerMap;
   /** Chapter finished — the flow re-derives where the seller goes next. */
@@ -45,7 +44,6 @@ interface Props {
 }
 
 export function FeaturesChapter({
-  token,
   sellerName,
   initialAnswers,
   onChapterDone,
@@ -77,8 +75,7 @@ export function FeaturesChapter({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
-          answers: entries.map((e) => ({ ...e, source: "form" })),
+                  answers: entries.map((e) => ({ ...e, source: "form" })),
         }),
       });
       setUnsaved(!response.ok);

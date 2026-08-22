@@ -16,7 +16,7 @@ import { agentQueue, isVisible } from "@/tds/flow";
 import { describeAnswer } from "@/tds/form-view";
 import type { AnswerMap } from "@/tds/types";
 import { Card, Pill } from "@/app/ui";
-import { AfterSigning } from "@/app/s/[token]/after-signing";
+import { AfterSigning } from "@/app/disclosure/_components/after-signing";
 
 interface Props {
   sellerName: string;

@@ -16,7 +16,6 @@ import { Button } from "@/app/ui";
  */
 
 interface Props {
-  token: string;
   chapter: ChapterId;
   initialAnswers: AnswerMap;
   onSwitchToVoice?: () => void;
@@ -27,7 +26,6 @@ interface Props {
 }
 
 export function QuestionList({
-  token,
   chapter,
   initialAnswers,
   onSwitchToVoice,
@@ -65,8 +63,7 @@ export function QuestionList({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
-          answers: [{ questionId, value, status, source: "form" }],
+                  answers: [{ questionId, value, status, source: "form" }],
         }),
       });
       setUnsaved(!res.ok);

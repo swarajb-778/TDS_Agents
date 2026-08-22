@@ -23,7 +23,6 @@ interface ReviewedConflict {
 }
 
 interface Props {
-  token: string;
   sellerName: string;
   answers: AnswerMap;
   onRevisit: () => void;
@@ -31,18 +30,18 @@ interface Props {
   onSign: () => void;
 }
 
-export function Review({ token, sellerName, answers, onRevisit, onSign }: Props) {
+export function Review({ sellerName, answers, onRevisit, onSign }: Props) {
   const [conflicts, setConflicts] = useState<ReviewedConflict[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   /** Undefined until we know. The last button stays put rather than flickering. */
   const [signed, setSigned] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
-    fetch(`/api/conflicts?token=${encodeURIComponent(token)}`)
+    fetch("/api/conflicts")
       .then((r) => (r.ok ? r.json() : { conflicts: [] }))
       .then((d) => setConflicts(d.conflicts ?? []))
       .catch(() => setConflicts([]));
-  }, [token]);
+  }, []);
 
   /*
    * A seller who has already signed and comes back through their link must not
@@ -72,7 +71,7 @@ export function Review({ token, sellerName, answers, onRevisit, onSign }: Props)
       const res = await fetch("/api/conflicts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, ruleId, undo }),
+        body: JSON.stringify({ ruleId, undo }),
       });
       if (res.ok) setConflicts((await res.json()).conflicts);
     } catch {

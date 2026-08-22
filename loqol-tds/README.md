@@ -143,11 +143,21 @@ src/db/                Persistence. The only place that knows about rows.
   conflicts.ts         Which contradictions the seller stood by
 
 src/app/
-  s/[token]/           The seller. Welcome-back, chapters, voice, review.
+  s/[token]/           Token exchange only. Sets a cookie, redirects, done.
+  disclosure/          The seller, tokenless.
+    page.tsx             Dispatcher — derives the chapter, redirects. Renders nothing.
+    welcome/             First screen after the magic link
+    c/[chapterId]/       The interview. ?mode=voice|form
+    review/  sign/       Before signing, and signing
+    help/                The five dead ends, each with a way out
+    _components/         Chapters, voice, review cards
+  agent/               The agent. Login, deals, review, account.
   api/answers          Read and write answers (both modalities)
   api/voice/session    Mints an ephemeral OpenAI token
   api/voice/tool       Executes voice tool calls server-side
   api/conflicts        Standing by a contradiction, or changing your mind
+  api/sign             Creates the DocuSeal submission
+  api/webhooks/docuseal  Signature completed
 
 scripts/
   validate.ts          Registry integrity — run before any registry commit

@@ -37,7 +37,6 @@ interface Finished {
 }
 
 interface Props {
-  token: string;
   chapter: ChapterId;
   onSwitchToForm: (questionId: string) => void;
   /**
@@ -57,7 +56,7 @@ type Status = "idle" | "connecting" | "live" | "ended" | "error";
 /** How often the watchdog asks whether the seller has been left in silence. */
 const NUDGE_INTERVAL_MS = 2_000;
 
-export function VoiceChapter({ token, chapter, onSwitchToForm, onAdvance }: Props) {
+export function VoiceChapter({ chapter, onSwitchToForm, onAdvance }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [lines, setLines] = useState<Line[]>([]);
   const [recorded, setRecorded] = useState<string[]>([]);
@@ -153,7 +152,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onAdvance }: Prop
         const response = await fetch("/api/voice/tool", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, name, args }),
+          body: JSON.stringify({ name, args }),
         });
         result = await response.json();
       } catch {
@@ -208,7 +207,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onAdvance }: Prop
 
       dispatch({ type: "tool.settled", callId });
     },
-    [token, say, send, dispatch, stop, onSwitchToForm],
+    [say, send, dispatch, stop, onSwitchToForm],
   );
 
   const start = useCallback(async () => {
@@ -220,7 +219,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onAdvance }: Prop
       const res = await fetch("/api/voice/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, chapter }),
+        body: JSON.stringify({ chapter }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Could not start.");
       const session = await res.json();
@@ -332,7 +331,7 @@ export function VoiceChapter({ token, chapter, onSwitchToForm, onAdvance }: Prop
             : "Could not start the conversation.",
       );
     }
-  }, [token, chapter, runTool, dispatch, stop]);
+  }, [chapter, runTool, dispatch, stop]);
 
   const advance = useCallback(() => {
     stop();

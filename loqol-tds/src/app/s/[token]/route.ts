@@ -34,7 +34,7 @@ export async function GET(
 
   if (access.outcome === "valid" || access.outcome === "submitted") {
     const cookie = sessionCookie(access.session);
-    const response = to("/disclosure");
+    const response = to("/disclosure/welcome");
     response.cookies.set(SELLER_COOKIE, cookie.value, sellerCookieOptions(cookie.maxAge));
     return response;
   }
@@ -54,7 +54,7 @@ export async function GET(
     "dealId" in access &&
     existing.session.dealId === access.dealId
   ) {
-    return to("/disclosure");
+    return to("/disclosure/welcome");
   }
 
   const response = to("/disclosure/help");
