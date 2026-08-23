@@ -5,6 +5,7 @@ import { signUp } from "@/db/account-flows";
 import { looksLikeEmail } from "@/db/accounts";
 import { recordAccountAttempt } from "@/db/rate-limit";
 import { clientIp } from "../ip";
+import { mailConfigured } from "@/mail/send";
 
 /**
  * Create an agent account — or don't, and say exactly the same thing.
@@ -69,5 +70,5 @@ export async function POST(request: Request) {
   // emails to send, and hands this route nothing it could accidentally leak.
   await signUp({ email, name, password }, appOrigin(request));
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, delivered: mailConfigured() });
 }

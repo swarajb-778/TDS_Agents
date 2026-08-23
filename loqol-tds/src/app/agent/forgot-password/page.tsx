@@ -10,6 +10,7 @@ export default function ForgotPassword() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState(true);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,6 +34,7 @@ export default function ForgotPassword() {
         }
         return;
       }
+      setDelivered(json.delivered !== false);
       setSent(email);
     } catch {
       setError("Could not reach the server. Try again in a moment.");
@@ -44,6 +46,34 @@ export default function ForgotPassword() {
   /* Identical for an address with an account and one without. Saying "no
    * account with that email" here would be the same leak as a distinguishable
    * sign-in failure — see the route for the argument. */
+  /*
+   * The one flow that genuinely cannot finish without a provider, so it says so
+   * rather than leaving someone refreshing a mailbox.
+   *
+   * The link is NOT shown here, and that is not an oversight: rendering it would
+   * let anyone reset any account by typing its address. It stays in the server
+   * log, where reaching it already means having the server.
+   */
+  if (sent && !delivered) {
+    return (
+      <AuthShell
+        title="This build can't email you"
+        lead="No mail provider is wired up, so a reset link can't reach you. It's written to the server log instead — showing it here would let anyone reset any account."
+        footer={
+          <Link href="/agent/login" className="font-medium text-brand-strong underline">
+            Back to sign in
+          </Link>
+        }
+      >
+        <Card className="mt-6" tone="sunken">
+          <p className="text-sm text-ink-muted">
+            Seed accounts are in the README if you need one to sign in with.
+          </p>
+        </Card>
+      </AuthShell>
+    );
+  }
+
   if (sent) {
     return (
       <AuthShell

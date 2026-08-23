@@ -4,6 +4,7 @@ import { requestPasswordReset } from "@/db/account-flows";
 import { looksLikeEmail } from "@/db/accounts";
 import { recordAccountAttempt } from "@/db/rate-limit";
 import { clientIp } from "../../ip";
+import { mailConfigured } from "@/mail/send";
 
 /**
  * "Email me a reset link."
@@ -56,5 +57,5 @@ export async function POST(request: Request) {
    */
   await requestPasswordReset(email, appOrigin(request));
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, delivered: mailConfigured() });
 }

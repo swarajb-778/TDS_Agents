@@ -84,6 +84,22 @@ export async function sendEmail(message: Email): Promise<void> {
   }
 }
 
+/**
+ * Whether `deliver()` can actually reach a mailbox.
+ *
+ * False until a provider is wired above, which makes it false on the deployed
+ * demo. The screens that would otherwise say "check your email" ask this first,
+ * because a promise the deployment cannot keep reads as a broken signup — a new
+ * agent waits for a link that is sitting in a server log they cannot see.
+ *
+ * Constant per deployment and independent of the address, so returning it to
+ * the client tells an attacker nothing that the deployment does not already
+ * announce to everyone equally. It is not an enumeration signal.
+ */
+export function mailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
 /** Dev and test only — always empty in production. */
 export function recentEmails(): readonly Email[] {
   return outbox;

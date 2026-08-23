@@ -107,6 +107,14 @@ Sign in at **`/agent/login`**.
    distinguishable signup is an account-enumeration oracle. Same for
    **`/agent/forgot-password`** with a known vs unknown address.
 
+   Because no mail provider is wired, the success screen says so and sends you
+   straight to sign in rather than promising a link that will never arrive —
+   the account really is created, with the password you chose. The copy is
+   identical whichever branch you hit, so the indistinguishability survives.
+   Password *reset* is the one flow that cannot finish without a provider; that
+   screen says so too, and deliberately does not print the link, since showing
+   it would let anyone reset any account.
+
 ### 2 — Seller
 
 Open a link **in a phone-sized window**.

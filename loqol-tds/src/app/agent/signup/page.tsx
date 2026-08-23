@@ -11,6 +11,7 @@ export default function AgentSignup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState(true);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +40,7 @@ export default function AgentSignup() {
         }
         return;
       }
+      setDelivered(json.delivered !== false);
       setSent(email);
     } catch {
       setError("Could not reach the server. Try again in a moment.");
@@ -55,6 +57,45 @@ export default function AgentSignup() {
    * because describing both possibilities gives away nothing — only the person
    * holding the mailbox learns which one arrived.
    */
+  /*
+   * No provider wired, so there is no email to check and saying otherwise is
+   * how a working signup reads as a broken one. Still one outcome whatever
+   * happened: this copy is identical for a free address and a taken one, and
+   * only the person who knows the account's password learns which they had.
+   */
+  if (sent && !delivered) {
+    return (
+      <AuthShell
+        title="You're all set"
+        lead={
+          <>
+            This build doesn&rsquo;t send email, so there&rsquo;s no link to wait
+            for. Sign in with{" "}
+            <span className="font-medium text-ink">{sent}</span> and the password
+            you just chose.
+          </>
+        }
+        footer={
+          <>
+            Wiring a real provider is one function in{" "}
+            <code className="text-ink">src/mail/send.ts</code> — until then, links
+            are written to the server log.
+          </>
+        }
+      >
+        <Link href="/agent/login" className="mt-8 block">
+          <Button full>Go to sign in</Button>
+        </Link>
+        <Card className="mt-4" tone="sunken">
+          <p className="text-sm text-ink-muted">
+            If that address already had an account, nothing changed — sign in with
+            that account&rsquo;s existing password instead.
+          </p>
+        </Card>
+      </AuthShell>
+    );
+  }
+
   if (sent) {
     return (
       <AuthShell
