@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "California TDS seller disclosure \u2014 question registry, flow engine, and DocuSeal mapping",
+  "description": "California TDS seller disclosure — question registry, flow engine, and DocuSeal mapping",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,13 +15,14 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
     "db:check": "tsx scripts/db-check.ts",
-    "check": "npm run typecheck && npm run validate && npm run smoke && npm run form:check && npm run contrast:check",
+    "check": "npm run typecheck && npm run validate && npm run smoke && npm run form:check && npm run contrast:check && npm run coldstart:check",
     "form:check": "tsx scripts/form-check.ts",
     "docuseal:template": "tsx scripts/build-template.ts",
     "docuseal:create": "tsx scripts/build-template.ts --create",
     "docuseal:fill": "tsx scripts/fill-pdf.ts",
     "voice:check": "tsx scripts/voice-check.ts",
-    "contrast:check": "tsx scripts/contrast-check.ts"
+    "contrast:check": "tsx scripts/contrast-check.ts",
+    "coldstart:check": "tsx scripts/coldstart-check.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

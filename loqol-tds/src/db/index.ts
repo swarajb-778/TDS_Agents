@@ -11,22 +11,40 @@ import * as schema from "./schema";
 try {
   process.loadEnvFile();
 } catch {
-  // no .env file; fall through to the check below
+  // no .env file; the platform environment is expected to supply DATABASE_URL
 }
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-  throw new Error(
-    "DATABASE_URL is not set. Copy .env.example to .env and paste the Supabase " +
-      "session-pooler URI (port 5432).",
-  );
-}
-// A half-filled placeholder otherwise fails much later as an opaque DNS error.
-if (url.includes("<")) {
-  throw new Error(
-    "DATABASE_URL still contains placeholders. Paste the real Supabase " +
-      "session-pooler URI (Connect -> ORMs, port 5432) into .env.",
-  );
+/**
+ * The connection is built on first use, never at import.
+ *
+ * `next build` imports every route module to collect page data, so a throw at
+ * module scope fails the build on a machine that has no database — which is
+ * every CI builder. Deferring it means a missing DATABASE_URL surfaces on the
+ * first query, at request time, where it is actually a problem.
+ */
+function connect(): ReturnType<typeof postgres> {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. Copy .env.example to .env and paste the Supabase " +
+        "session-pooler URI (port 5432).",
+    );
+  }
+  // A half-filled placeholder otherwise fails much later as an opaque DNS error.
+  if (url.includes("<")) {
+    throw new Error(
+      "DATABASE_URL still contains placeholders. Paste the real Supabase " +
+        "session-pooler URI (Connect -> ORMs, port 5432) into .env.",
+    );
+  }
+  return postgres(url, {
+    // prepare: false is required if this ever points at the transaction pooler
+    // (port 6543), and costs nothing on the session pooler.
+    prepare: false,
+    max: 5,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
 }
 
 /**
@@ -43,24 +61,33 @@ if (url.includes("<")) {
  */
 const globalForDb = globalThis as unknown as {
   loqolSql?: ReturnType<typeof postgres>;
+  loqolDb?: ReturnType<typeof drizzle<typeof schema>>;
 };
 
-export const sql =
-  globalForDb.loqolSql ??
-  postgres(url, {
-    // prepare: false is required if this ever points at the transaction pooler
-    // (port 6543), and costs nothing on the session pooler.
-    prepare: false,
-    max: 5,
-    idle_timeout: 20,
-    connect_timeout: 10,
-  });
+function real(): ReturnType<typeof drizzle<typeof schema>> {
+  if (!globalForDb.loqolDb) {
+    globalForDb.loqolSql ??= connect();
+    globalForDb.loqolDb = drizzle(globalForDb.loqolSql, { schema });
+  }
+  return globalForDb.loqolDb;
+}
 
-if (process.env.NODE_ENV !== "production") globalForDb.loqolSql = sql;
-
-export const db = drizzle(sql, { schema });
+/**
+ * ponytail: a Proxy rather than turning 14 call sites into `getDb()`. Every
+ * consumer keeps `import { db }` and the laziness stays an implementation
+ * detail of this file.
+ */
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_target, prop, receiver) {
+    const instance = real();
+    const value = Reflect.get(instance, prop, receiver);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+});
 
 /** Scripts need this or the pool keeps the process alive. */
-export function closeDb(): Promise<void> {
-  return sql.end();
+export async function closeDb(): Promise<void> {
+  await globalForDb.loqolSql?.end();
+  globalForDb.loqolSql = undefined;
+  globalForDb.loqolDb = undefined;
 }

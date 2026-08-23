@@ -141,17 +141,21 @@ from** (tapped, spoken, or filled by you) and the seller's own recorded words.
 ## The checks
 
 ```bash
-npm run check        # typecheck, registry, flow, form projection, WCAG contrast
+npm run check        # typecheck, registry, flow, form projection, WCAG contrast, cold start
 npm run db:check     # persistence, audit trail, auth timing, throttling, signing
 npm run voice:check  # the voice tool contract, against the real handler
 ```
 
-**49 assertions.** `assert`-based scripts, no framework — each is the smallest
+**51 assertions.** `assert`-based scripts, no framework — each is the smallest
 thing that fails if the logic breaks. Most of the bugs described in the write-up
 were found by writing them.
 
 `npm run check` needs **no environment at all** — the registry and flow engine
-have no external dependencies. The other two need `DATABASE_URL`.
+have no external dependencies, and the last of its checks exists to keep that
+true: it imports the database module from a directory with no `.env` and
+asserts the import survives. A throw at module scope is invisible locally and
+fails `next build` on every CI machine. The other two suites need
+`DATABASE_URL`.
 
 ```bash
 npm run docuseal:template               # dry run: which fields place, which don't
@@ -226,7 +230,18 @@ Stated so a gap reads as a decision rather than an oversight.
 
 ## Deploying
 
-One Next.js deployable. Set the environment variables above, run
-`npm run db:migrate` against the production database, and point
-`DOCUSEAL_WEBHOOK_SECRET` at the real webhook secret. `APP_URL` must match the
-deployed origin — it is what magic links are built from.
+One Next.js deployable. On Vercel, set the **Root Directory** to `loqol-tds` —
+the app is nested one level below the repository root.
+
+Set the environment variables above, then run `npm run db:migrate` against the
+production database. Three of them fail in ways that are hard to read from the
+symptom:
+
+- **`APP_URL`** must match the deployed origin. It is what magic links are built
+  from, so a stale value sends sellers to localhost.
+- **`DOCUSEAL_WEBHOOK_SECRET`** must be the real `whsec_…`. Signature
+  verification fails closed, so a wrong value looks like a silent webhook.
+- **`DATABASE_URL`** must be the session pooler, port **5432**.
+
+Nothing is required at *build* time — the build imports every route module, and
+none of them touch the database until a request arrives.
