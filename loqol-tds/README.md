@@ -1,211 +1,232 @@
 # Loqol TDS
 
-A California Transfer Disclosure Statement, completed by the seller **by voice
-or by form — their choice, switchable mid-question** — and pushed to DocuSeal as
-a filled, signable PDF.
+A California **Transfer Disclosure Statement**, completed by the seller **by
+voice or by form — their choice, switchable mid-question** — and pushed to
+DocuSeal as a filled, signable PDF. A listing agent creates the deal, sends a
+link, and reviews what comes back.
 
-**→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the write-up.** The routing
-decision and its defence, the six seller-experience questions from the brief,
-the auth model, and what I deliberately skipped. Start there.
-
-**→ [`docs/HANDOFF.md`](docs/HANDOFF.md) if you are picking this up.** What is
-true right now, what has never been verified, and the five things that took
-longest to learn — each of which is easy to undo by accident.
+**→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the write-up.** The voice/form
+routing decision and its defence, the six seller-experience questions from the
+brief answered one by one, the auth model, and what was deliberately skipped.
+**Start there** — this file is just how to run and test it.
 
 ---
 
-## Run it
+## Quick start
 
 ```bash
 npm install
-cp .env.example .env      # DATABASE_URL, DOCUSEAL_API_KEY, OPENAI_API_KEY, AUTH_SECRET
+cp .env.example .env      # see "Environment" below
 npm run db:migrate
-npm run db:seed           # prints two magic links
+npm run db:seed           # prints the agent login and two seller links
 npm run dev
 ```
 
-`.env.example` documents which Supabase connection string to use and why the
-transaction pooler will not work.
+Then open <http://localhost:3000/agent/login>.
 
-The seed creates one agent (`agent@loqol.test` / `loqol-demo-2026`) and two
-deals: one untouched, one mid-flow carrying all four answer statuses, a voice
-answer with its verbatim, a follow-up explanation, and a pair of answers that
-trips a hard conflict rule. Open either magic link to be the seller.
+`npm run db:seed` prints everything you need:
 
-## Try it
+```
+Agent login   agent@loqol.test / loqol-demo-2026
 
-`npm run db:seed` prints two magic links and the agent login. Open the links in
-a **phone-sized window** — the seller flow is designed phone-first.
-
-**Dana Reyes** starts fresh. **Marcus Oyelaran** is mid-flow and already carries
-all four answer statuses, a voice answer with its verbatim, and a pair of
-answers that trips a hard conflict.
-
-### As the seller
-
-1. **Open Dana's link.** You land on a welcome screen naming where you are and
-   how long is left — not a percentage.
-2. **"What's in the home."** Tap what the house has, then *"That's everything
-   here."* That confirm is what turns untapped chips into an explicit *no*.
-   Tap **Fireplace** and watch two more questions appear without a reload.
-3. **Tap "Come back to this"** on any question. It will not be re-asked
-   immediately — it returns once nothing new is left.
-4. **Close the tab and reopen the same link.** You land back in the same place.
-   Nothing is stored about your position; it is derived from your answers.
-5. **Keep going to "Anything not working."** That chapter is voice-first. Press
-   **Start talking** and allow the microphone. If you deny it, or you would
-   rather not, *"Just show me the buttons"* is there in every state.
-6. **In voice, try these deliberately:** hedge on an answer ("I think so,
-   maybe?") and watch it re-ask rather than record. Say *"I don't know"* and
-   watch it check whether you mean *"not aware of any"* — different answers on
-   a TDS. Say *"can you just show me the buttons"* and it hands over without
-   arguing.
-7. **Contradict yourself.** Answer *yes* to the HOA question and *no* to the one
-   about written rules. A quiet note appears on that card. It does not block.
-8. **Finish, and read the review screen.** Both sides of each contradiction are
-   quoted back in your own words — including what you actually said out loud if
-   it came from voice. Choose *"Both are right"* and it is recorded, not
-   corrected.
-
-### As the agent
-
-Sign in at `/agent/login` with the credentials the seed printed.
-
-1. The list shows every seller with derived status, progress, and how many
-   things need you. Nothing about status is stored — it is computed from the
-   answers.
-2. Open **Marcus**. The top three tiles are the actual work: what he could not
-   answer, what does not line up, what he set aside. Below that, every answer
-   with **where it came from** — tapped, spoken, or filled by you — and his own
-   words underneath.
-3. **New disclosure** creates a seller, prefills the property details they
-   cannot reasonably know, and issues a link. The link is shown once.
-4. **"Send a fresh link"** revokes the old one, so only ever one works.
-
-### The end-to-end PDF
-
-```bash
-npm run docuseal:fill "Marcus Oyelaran"
+Magic links (plaintext token shown once, only the hash is stored):
+  Dana Reyes (not started)   http://localhost:3000/s/…
+  Marcus Oyelaran (mid-flow) http://localhost:3000/s/…
 ```
 
-Writes `filled-tds-marcus.pdf`. Page 1 has the checkboxes and header, page 2 has
-Section C with the numbered shared explain box, page 3 has the signatures.
+**Open the seller links in a phone-sized window.** The seller flow is
+phone-first; the agent dashboard is desktop-first.
+
+**Keep the `npm run dev` terminal visible.** Email is a deliberate log-only
+seam — signup and password-reset links print there rather than being sent.
+
+---
+
+## Environment
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Postgres. Supabase users: the **session pooler**, port **5432**. Not 6543 — `drizzle-kit migrate` needs prepared statements. |
+| `AUTH_SECRET` | Any long random string. Signs agent and seller session cookies. |
+| `OPENAI_API_KEY` | Server-side only. The browser gets a short-lived ephemeral token. |
+| `DOCUSEAL_API_KEY` | Test Mode key. |
+| `DOCUSEAL_TDS_TEMPLATE_ID` | Created by `npm run docuseal:create`. |
+| `DOCUSEAL_WEBHOOK_SECRET` | From Console → Webhooks → Security → HMAC. Signature verification **fails closed** without it. |
+
+`.env.example` documents each with the reasoning.
+
+---
+
+## How to test it
+
+Roughly fifteen minutes end to end. Ordered the way the product is actually
+used: the agent creates everything, the seller only ever receives a link.
+
+### 1 — Agent
+
+Sign in at **`/agent/login`**.
+
+1. The deal list shows each seller with **derived** status and progress —
+   nothing about status is stored, it is computed from the answers.
+2. **New disclosure** → seller name, email, address, then the property details
+   the seller cannot reasonably know: county, legal description. *Nobody knows
+   their own legal property description; asking a seller for it is how you lose
+   them in the first thirty seconds.*
+3. **The magic link is shown once.** Copy it.
+4. **`/agent/signup`** — try an email that already exists. You get the *same*
+   response as a new one, and the owner is mailed a sign-in link instead. A
+   distinguishable signup is an account-enumeration oracle. Same for
+   **`/agent/forgot-password`** with a known vs unknown address.
+
+### 2 — Seller
+
+Open a link **in a phone-sized window**.
+
+1. **Watch the address bar.** It changes to `/disclosure` and the token
+   disappears — it is exchanged for an httpOnly cookie, so it never persists in
+   history, screenshots, or a `Referer` header.
+2. **"What's in the home"** — tap what the house has, then **"That's everything
+   here."** That confirm turns untapped chips into an explicit *no*; without it,
+   "there is no sauna" and "never reached this group" would be indistinguishable
+   in the database.
+3. **Tap "Fireplace"** — two more questions appear with no reload.
+4. **Tap "Come back to this"** — it is *not* re-asked immediately; it returns
+   once nothing new is left.
+5. **Close the tab and reopen the link** — you land back in place. Position is
+   derived from your answers, not stored.
+
+### 3 — Voice
+
+Continue to **"Anything not working"**, press **Start talking**, allow the mic.
+
+Worth trying deliberately:
+
+- **Hedge** — *"I think so, maybe?"* → it re-asks rather than recording a
+  low-confidence answer.
+- **Say "I don't know"** → it checks whether you mean *"no, not aware of any."*
+  On a TDS those are different answers and sellers conflate them constantly.
+- **Say "just show me the buttons"** → hands over immediately, no argument, and
+  lands on **the question you were just discussing** with anything you already
+  said shown as answered.
+- **Deny the microphone** → the escape hatch is present in *every* state.
+
+### 4 — Contradictions
+
+Answer **yes** to the HOA question and **no** to written rules. A quiet note
+appears. **Nothing blocks.**
+
+At review, both sides are quoted back **in your own words** — including what you
+actually said out loud. Choose **"Both are right"** and it is recorded, not
+corrected: the contradiction stays visible to the agent, you just stop being
+asked.
+
+### 5 — Signing, and back to the agent
+
+Sign. Afterwards you get **"I need to change something"** — it does not let you
+edit a signed legal document; it flags the deal for the agent.
+
+Reopen the deal as the agent: three tiles are the actual work — **couldn't
+answer / don't line up / set aside** — then every answer with **where it came
+from** (tapped, spoken, or filled by you) and the seller's own recorded words.
 
 ### Things worth trying to break
 
-- Open a seller link with a character changed &mdash; you get the expired-link
-  screen, not an error.
-- Sign out, then visit `/agent` &mdash; you are redirected, not shown data.
-- With the browser in dark mode, reload anything. Both themes are designed;
-  `npm run contrast:check` asserts every colour pair in both.
+- Change a character in a seller link → *"this link looks incomplete"*, never a 404
+- Sign out, visit `/agent` → redirected, not shown data
+- `/disclosure/c/features?q=not-a-question` → 200, nothing marked
+- Reload anything in dark mode → both themes are designed, not inverted
 
-## Check it
+---
+
+## The checks
 
 ```bash
 npm run check        # typecheck, registry, flow, form projection, WCAG contrast
-npm run db:check     # upsert vs audit trail, answer statuses, conflicts, credentials
-npm run voice:check  # the voice tool contract, against the real route handler
+npm run db:check     # persistence, audit trail, auth timing, throttling, signing
+npm run voice:check  # the voice tool contract, against the real handler
 ```
 
-`npm run check` needs no environment at all — the registry and flow engine have
-no external dependencies. The other two need `DATABASE_URL`.
-
-These are `assert`-based scripts, not print-outs: each is the smallest thing
-that fails if the logic breaks. Several of the bugs described in the write-up
+**49 assertions.** `assert`-based scripts, no framework — each is the smallest
+thing that fails if the logic breaks. Most of the bugs described in the write-up
 were found by writing them.
 
+`npm run check` needs **no environment at all** — the registry and flow engine
+have no external dependencies. The other two need `DATABASE_URL`.
+
 ```bash
-npm run docuseal:template   # dry run: report which fields place and which don't
-npm run docuseal:create     # build the template in DocuSeal from the blank PDF
-npm run docuseal:fill "Marcus Oyelaran"   # a real filled, signed PDF
+npm run docuseal:template               # dry run: which fields place, which don't
+npm run docuseal:create                 # build the template from the blank PDF
+npm run docuseal:fill "Marcus Oyelaran" # a real filled, signed PDF
 ```
 
-## Repo map
+---
+
+## How it is put together
+
+One **declarative registry** — 89 questions, each with its plain-English
+translation, voice prompt, follow-up rule, gate and PDF field name. Everything
+else is a projection of it.
 
 ```
-docs/
-  DECISIONS.md         ← the write-up. Routing, defended; the brief's questions answered.
-  REGISTRY.md          Registry-level design notes.
-  BUILD_PLAN.md        The tasks, with acceptance criteria and what each one found.
-CLAUDE.md              Operating brief and hard rules.
-
-src/tds/               Pure. No network, no React, no database.
-  types.ts             Question, Answer, Gate, FollowUp, DocuSealMapping
-  registry.ts          The form itself — 89 questions, translations, voice prompts
-  flow.ts              Gates, next-question, follow-ups, progress, resume, validation
-  conflicts.ts         20 cross-answer rules with seller-facing messages
-  form-view.ts         Registry → form projection (chip vs Yes/No, landing group)
-  voice.ts             Registry → the voice agent's brief
-  docuseal.ts          Field mapping, submission builder, signer fields
-
-src/db/                Persistence. The only place that knows about rows.
-  schema.ts            7 tables. answers is state; answer_events is append-only history.
-  answers.ts           loadAnswers() / writeAnswer() — the single write path
-  crypto.ts            scrypt passwords, SHA-256 magic-link tokens
-  requests.ts          Magic-link resolution
-  sessions.ts          Modality preference (not position — that's derived)
-  conflicts.ts         Which contradictions the seller stood by
-
-src/app/
-  s/[token]/           Token exchange only. Sets a cookie, redirects, done.
-  disclosure/          The seller, tokenless.
-    page.tsx             Dispatcher — derives the chapter, redirects. Renders nothing.
-    welcome/             First screen after the magic link
-    c/[chapterId]/       The interview. ?mode=voice|form
-    review/  sign/       Before signing, and signing
-    help/                The five dead ends, each with a way out
-    _components/         Chapters, voice, review cards
-  agent/               The agent. Login, deals, review, account.
-  api/answers          Read and write answers (both modalities)
-  api/voice/session    Mints an ephemeral OpenAI token
-  api/voice/tool       Executes voice tool calls server-side
-  api/conflicts        Standing by a contradiction, or changing your mind
-  api/sign             Creates the DocuSeal submission
-  api/webhooks/docuseal  Signature completed
-
-scripts/
-  validate.ts          Registry integrity — run before any registry commit
-  smoke.ts             Gates, follow-ups, progress, conflicts, field mapping
-  form-check.ts        Chip/Yes-No split, group reachability, deferral
-  db-check.ts          Persistence and audit trail
-  voice-check.ts       The voice tool contract
-  seed.ts              One agent, two deals, two magic links
-  extract_boxes.py     Pulls all 117 checkbox glyphs out of the blank PDF
-  prepare_pdf.py       Strips the [City]/[County] placeholder tokens
-  build-template.ts    Matches glyphs to the registry, creates the DocuSeal template
-  fill-pdf.ts          Seeded answers → submission → filled PDF
-
-assets/
-  ca-tds-blank.pdf     The source form, as supplied
-  ca-tds-template.pdf  Prepared base, placeholder tokens removed
-  tds-boxes.json       Extracted glyph positions, regenerable
+                    src/tds/registry.ts
+                            │
+     ┌──────────────┬───────┴───────┬──────────────┐
+     ▼              ▼               ▼              ▼
+Form renderer   Voice agent    Conflict rules   DocuSeal
+     │              │               │              │
+     └──────┬───────┘               │              │
+            ▼                       │              │
+      answers table ◄───────────────┴──────────────┘
 ```
-
-## The core idea
-
-One declarative registry. The form renderer, the voice agent's tool schemas, the
-progress meter, the conflict engine and the DocuSeal field map are all
-projections of it.
 
 *"Start in one path, finish in the other"* sounds like a sync problem. It isn't:
-there is a single answer store and two input adapters writing to it, and
-position is derived from the answers rather than stored. There is nothing to
-sync, so switching mid-question costs nothing to support.
+one answer store, two input adapters, and position **derived** from the answers
+rather than stored. There is nothing to sync, which is why switching
+mid-question costs nothing.
 
-## Status
+**61 form · 20 voice · 8 agent-only. 144 DocuSeal fields, 140 placed. 20
+conflict rules.**
 
-| | |
-|---|---|
-| Registry, flow, conflicts | 89 questions, 20 rules, zero validator errors |
-| Persistence | Supabase + Drizzle, append-only audit trail |
-| Seller form path | Phone-first, 9 grouped rooms, live gating |
-| DocuSeal | Template generated from the PDF's own glyphs — 140/144 fields |
-| Voice | OpenAI Realtime over WebRTC, server-owned queue |
-| Resume, handoff, progress | Position derived; chapters and minutes |
-| Conflicts | Inline notes and a review screen; standing-by recorded |
-| Agent view | Signed-cookie auth, CSRF, derived status, full review |
-| Design system | Semantic tokens, both themes, contrast asserted |
+```
+src/tds/          Pure. No network, no React, no database.
+  registry.ts       The form itself
+  flow.ts           Gates, next-question, follow-ups, progress, resume
+  conflicts.ts      20 cross-answer rules with seller-facing messages
+  form-view.ts      Registry → form projection
+  voice.ts          Registry → the voice agent's brief
+  voice-turns.ts    The Realtime response lifecycle, as a pure reducer
+  docuseal.ts       Field mapping, submission builder, signer fields
 
-All eight tasks in [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) are complete. Known
-gaps are enumerated in [`docs/DECISIONS.md`](docs/DECISIONS.md) §9 rather than
-left to be discovered.
+src/db/           Persistence. answers is state; answer_events is history.
+src/app/
+  s/[token]/        Token exchange only — sets a cookie, redirects
+  disclosure/       The seller, tokenless. Dispatcher, chapters, review, sign
+  agent/            The agent. Deals, review, account
+  api/              One write path for both modalities; voice tools; webhooks
+
+scripts/          The checks, the seed, and the DocuSeal template builder
+assets/           The blank TDS, and the prepared template base
+```
+
+---
+
+## Known limits
+
+Stated so a gap reads as a decision rather than an oversight.
+
+- **4 of 144 PDF fields have no slot.** The supplied PDF is a paraphrased TDS,
+  not the official C.A.R. form — it is missing four checkboxes the real form has
+  and puts header fields inline in prose. Each confirmed by rendering the page.
+- **Email is a log-only seam.** A real provider is a one-file swap.
+- **Rate limiting is in-memory**, so the budget is per instance.
+- **Not built, deliberately:** buyer and selling-agent signature routing (a TDS
+  is completed at listing, before an offer exists — the acknowledgement of
+  receipt is a second submission later), multi-unit per-unit branching,
+  attach-additional-sheets overflow, co-seller divergent answers.
+
+## Deploying
+
+One Next.js deployable. Set the environment variables above, run
+`npm run db:migrate` against the production database, and point
+`DOCUSEAL_WEBHOOK_SECRET` at the real webhook secret. `APP_URL` must match the
+deployed origin — it is what magic links are built from.
