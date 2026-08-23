@@ -5,8 +5,13 @@ voice or by form — their choice, switchable mid-question** — and pushed to
 DocuSeal as a filled, signable PDF. A listing agent creates the deal, sends a
 link, and reviews what comes back.
 
-**Live:** <https://tds-agents-er46ft8v3-imuniqueswaraj77s-projects.vercel.app>
-— start at `/`, which offers a sign-in. Seed credentials are below.
+**Live:** <https://tds-agents.vercel.app> — start at `/`, which offers a
+sign-in. Seed credentials are below.
+
+Use that address, not the per-deployment one Vercel shows after a build
+(`tds-agents-<hash>-<team>.vercel.app`). Those sit behind Vercel's SSO, so
+anyone not signed in to the owning account is bounced to a Vercel login — and
+they pin to a single build, so they stop tracking `main`.
 
 **→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the write-up.** The voice/form
 routing decision and its defence, the six seller-experience questions from the
@@ -52,7 +57,7 @@ production database seeds production. Only the token's *hash* is stored, so the
 origin in the printed link is cosmetic:
 
 ```bash
-APP_URL=https://tds-agents-er46ft8v3-imuniqueswaraj77s-projects.vercel.app npm run db:seed
+APP_URL=https://tds-agents.vercel.app npm run db:seed
 ```
 
 That prints magic links that work against the deployed app. Without `APP_URL`
