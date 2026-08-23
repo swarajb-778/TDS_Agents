@@ -22,5 +22,3 @@ npm run dev
 | **[`loqol-tds/README.md`](loqol-tds/README.md)** | Setup, environment, and a 15-minute walkthrough of every path |
 | **[`loqol-tds/docs/DECISIONS.md`](loqol-tds/docs/DECISIONS.md)** | The write-up — the voice/form routing decision, defended |
 | [`loqol-tds/docs/REGISTRY.md`](loqol-tds/docs/REGISTRY.md) | Registry-level design notes |
-
-Deploying to Vercel: set the project's **Root Directory** to `loqol-tds`.
