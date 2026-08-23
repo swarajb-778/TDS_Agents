@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Local tooling
+.claude/
+
+# Superseded scaffold from the original extraction — the app lives in loqol-tds/
+loqol-tds.zip
+/BUILD_PLAN.md
+/CLAUDE.md
+/REGISTRY.md
+/registry.ts
