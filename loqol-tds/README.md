@@ -5,6 +5,9 @@ voice or by form — their choice, switchable mid-question** — and pushed to
 DocuSeal as a filled, signable PDF. A listing agent creates the deal, sends a
 link, and reviews what comes back.
 
+**Live:** <https://tds-agents-er46ft8v3-imuniqueswaraj77s-projects.vercel.app>
+— start at `/`, which offers a sign-in. Seed credentials are below.
+
 **→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the write-up.** The voice/form
 routing decision and its defence, the six seller-experience questions from the
 brief answered one by one, the auth model, and what was deliberately skipped.
@@ -22,7 +25,9 @@ npm run db:seed           # prints the agent login and two seller links
 npm run dev
 ```
 
-Then open <http://localhost:3000/agent/login>.
+Then open <http://localhost:3000>. The root routes you by who you already
+are: signed-in agent to the dashboard, live seller session to wherever they left
+off, and anyone else to a sign-in.
 
 `npm run db:seed` prints everything you need:
 
@@ -39,6 +44,25 @@ phone-first; the agent dashboard is desktop-first.
 
 **Keep the `npm run dev` terminal visible.** Email is a deliberate log-only
 seam — signup and password-reset links print there rather than being sent.
+
+### Testing against the deployed app
+
+The seed talks to whatever `DATABASE_URL` points at, so pointing it at the
+production database seeds production. Only the token's *hash* is stored, so the
+origin in the printed link is cosmetic:
+
+```bash
+APP_URL=https://tds-agents-er46ft8v3-imuniqueswaraj77s-projects.vercel.app npm run db:seed
+```
+
+That prints magic links that work against the deployed app. Without `APP_URL`
+the links say `localhost` — the tokens are still valid, you just have to swap
+the origin yourself.
+
+**Open seller links in a private window.** The root sends a signed-in agent to
+their dashboard even if a seller cookie is also present (an agent bounced into a
+stale seller session would have to sign out to reach their own deals). Testing
+both roles in one window is the only situation where that shows.
 
 ---
 

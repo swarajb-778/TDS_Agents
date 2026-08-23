@@ -4,6 +4,8 @@ A California **Transfer Disclosure Statement**, completed by the seller **by
 voice or by form — their choice, switchable mid-question** — and pushed to
 DocuSeal as a filled, signable PDF.
 
+**Live:** <https://tds-agents-er46ft8v3-imuniqueswaraj77s-projects.vercel.app>
+
 **The application lives in [`loqol-tds/`](loqol-tds/).**
 
 ```bash
