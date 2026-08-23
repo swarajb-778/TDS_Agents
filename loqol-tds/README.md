@@ -13,10 +13,20 @@ Use that address, not the per-deployment one Vercel shows after a build
 anyone not signed in to the owning account is bounced to a Vercel login — and
 they pin to a single build, so they stop tracking `main`.
 
-**→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the write-up.** The voice/form
-routing decision and its defence, the six seller-experience questions from the
-brief answered one by one, the auth model, and what was deliberately skipped.
-**Start there** — this file is just how to run and test it.
+**→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the write-up.** This file is
+setup and testing; that one is the reasoning. Where each thing you asked for
+lives:
+
+| What you asked for | Where |
+|---|---|
+| The seller experience, and why — what mattered, what I cut | [§1](docs/DECISIONS.md), [§5](docs/DECISIONS.md), [§10](docs/DECISIONS.md) |
+| **Which parts go through voice vs form, defended** | [§2](docs/DECISIONS.md) — criteria fixed before reading the questions, then applied question by question |
+| The data model, and why it's shaped that way | [§3](docs/DECISIONS.md) — including what happens when a seller answers twice |
+| How auth works | [§6](docs/DECISIONS.md) — agent sessions, and what a guessed seller URL gets you |
+| How answers map to form fields | [§8](docs/DECISIONS.md) — template built from the flat PDF by glyph extraction |
+| Partial, ambiguous and contradictory answers | [§5.2–5.4](docs/DECISIONS.md) |
+| What I'd build next, what I knowingly left out | [§10](docs/DECISIONS.md) |
+| Setup | below |
 
 ---
 

@@ -162,7 +162,97 @@ Section B is the only place both paths run on the same question, deliberately.
 
 ---
 
-## 3. How the two paths stay consistent
+## 3. The data model
+
+Nine tables. The shape follows from one commitment: **the registry is the only
+place a question is defined, and the database stores answers to questions it
+never needs to understand.**
+
+```
+agents ──< deals ──< disclosure_requests   one live link per deal, others revoked
+                 ├─< answers               current state, UNIQUE (deal_id, question_id)
+                 ├─< answer_events         append-only history, never updated
+                 ├─< conflict_acks         UNIQUE (deal_id, rule_id)
+                 ├─< signings              DocuSeal submissions
+                 └── sessions              1:1, modality preference + transcript
+agents ──< agent_tokens                    sign-in and password-reset links
+```
+
+**`answers.question_id` is a text id from the registry, not a foreign key, and
+there is no `questions` table.** A question is code — it has a gate predicate, a
+follow-up rule, a voice prompt and a PDF field name. Half of that is not
+expressible as a row, so a `questions` table would be a partial duplicate that
+can disagree with the real definition. Adding a question means editing
+`registry.ts` and shipping; it never means a migration.
+
+The cost is honest: an id renamed in the registry orphans its stored answers.
+`npm run validate` is what makes that loud rather than silent.
+
+**`value` is `jsonb` because answers are not one type.** Booleans, strings,
+string arrays for multi-selects, and compound objects for items like
+`Water Heater: Gas / Solar / Electric`, which the brief flags as one question
+rather than three. A column per shape would be five mostly-null columns;
+`validateAnswer()` in `flow.ts` type-checks against the registry before any
+write, so the looseness stops at the boundary.
+
+### 3.1 Two tables, not an event log
+
+`answers` is current state; `answer_events` is append-only history. Deriving
+state from the log with `DISTINCT ON` was the alternative, and it was rejected
+because **every read here is a whole-form read** — `nextQuestion`, `progress`,
+`detectConflicts` and `toFieldValues` all take the complete `AnswerMap`. Paying
+a window function on every page load to reconstruct what a table can just hold
+buys nothing.
+
+Both rows are written **in one transaction**, so a state change without its
+audit row is not representable. On a document signed under penalty of perjury,
+that is not a nice-to-have.
+
+### 3.2 What happens when a seller answers the same question twice
+
+This is the interesting case, and it has three parts.
+
+**The state row is upserted, not inserted.** `ON CONFLICT (deal_id, question_id)
+DO UPDATE`. One question, one current answer, always — no ordering rule, no
+"most recent wins" query, no possibility of two live answers to one question.
+
+**The history row is appended.** So answering twice leaves **one row in
+`answers` and two in `answer_events`**. That is the exact assertion in
+`npm run db:check`, because it is the property everything else leans on.
+
+**Nothing is silently corrected.** A second answer that contradicts an earlier
+one is not a correction — it is two claims by the same person, and `conflicts.ts`
+surfaces both, quoted in the seller's own words, and asks which is right.
+Whichever they pick is recorded as a new answer plus a
+`conflict_acknowledgements` row; the earlier claim stays in `answer_events`
+forever. See §5.4.
+
+The audit trail therefore answers "what did they say, when, in which modality,
+how confident was the transcription, and what were their actual words" — via
+`source`, `confidence`, `verbatim`, `actor_type` and `actor_id`.
+
+### 3.3 Position is not in the database
+
+There is no `last_question_id`, deliberately. `nextQuestion(answers)` is a pure
+function of the answer set, so voice and form ask the same function and get the
+same answer. A stored cursor is a second source of truth that can disagree with
+the data it points into — and it is exactly what would break when a seller
+answers something out of order, or answers the same question twice.
+
+This is also why closing the tab costs nothing. Resume is not a feature; it is
+the absence of state that could be lost.
+
+### 3.4 Status is derived too
+
+Neither `disclosure_requests` nor `agent_tokens` has a status column. Live /
+used / expired / revoked is a function of `consumed_at`, `expires_at`,
+`revoked_at` and the clock. A stored status is a cache of that computation, and
+a cache that can be wrong about whether a credential is still valid is a
+security bug rather than a stale read.
+
+---
+
+## 4. How the two paths stay consistent
 
 There is one table, `answers`, unique on `(deal_id, question_id)`, and one write
 function: `writeAnswer()` in [`src/db/answers.ts`](../src/db/answers.ts). Both
@@ -186,9 +276,9 @@ optional.
 
 ---
 
-## 4. The six things the brief asked about
+## 5. The six things the brief asked about
 
-### 4.1 What order should questions come in?
+### 5.1 What order should questions come in?
 
 **Not PDF order.** The PDF opens with legal description and county, which is the
 worst possible first question and the reason those 8 fields belong to the agent.
@@ -201,7 +291,7 @@ come after trust is established, not first.
 Within "What's in the home", groups are ordered by **where things physically
 live**: kitchen, heating, safety, media, outside, water, garage, pool, roof.
 
-### 4.2 "I don't understand this question"
+### 5.2 "I don't understand this question"
 
 Every question carries `plainEnglish`, `whyWeAsk` and `examples`. In the form
 these render under the label; in voice the agent has them in its brief and is
@@ -211,7 +301,7 @@ fence that crosses onto your land' beats 'an encroachment'."*
 One guardrail, stated in the prompt: this is explanation, not legal advice. The
 fallback is always to flag it for the agent.
 
-### 4.3 "I don't know"
+### 5.3 "I don't know"
 
 A first-class answer status, not a validation failure. 28 questions carry
 `allowUnknown`, and the form shows "Not sure" as a real option beside Yes and
@@ -227,7 +317,7 @@ the two constantly. The voice agent is instructed to check before recording:
 Surfacing that distinction, rather than silently coercing either way, is the
 single highest-leverage thing in the voice prompt.
 
-### 4.4 Contradictions
+### 5.4 Contradictions
 
 20 rules, 8 hard and 12 soft, evaluated on every write. Three rules govern the
 handling:
@@ -255,7 +345,7 @@ data and stays visible to their agent — all that changes is the seller stops
 being asked. `db-check.ts` asserts the answer is untouched afterwards and the
 rule still fires.
 
-### 4.5 How do they know how much is left?
+### 5.5 How do they know how much is left?
 
 Chapters and minutes, never "field 87 of 150". A raw field count would lie:
 15 questions are gated, so a seller with no defects has a genuinely shorter form
@@ -276,7 +366,7 @@ it:
   and it returns forever. `inDeferralPass()` detects that state and offers
   *"that's everything I can answer — leave the rest for my agent"*.
 
-### 4.6 What happens if they close the tab?
+### 5.6 What happens if they close the tab?
 
 Nothing is lost, because nothing was ever only in the browser. Every answer is
 written on the interaction that produced it — optimistic locally, then to the
@@ -304,7 +394,7 @@ and we'll save them."*
 
 ---
 
-## 5. Auth
+## 6. Auth
 
 **Agent: email + password.** Password hashed with `scrypt` from `node:crypto`
 (salted, `timingSafeEqual` comparison) — a real KDF with no native dependency to
@@ -337,7 +427,7 @@ valid magic link.
 
 ---
 
-## 6. Voice: the model does not own the state machine
+## 7. Voice: the model does not own the state machine
 
 Worth stating separately because it is the part most likely to be built badly.
 
@@ -368,7 +458,7 @@ and the "not aware" check in §4.3.
 The seller sees a live transcript and a running list of what has been written
 down. They should never have to wonder what is being recorded about them.
 
-### 6.1 Words the seller never said
+### 7.1 Words the seller never said
 
 Speech-to-text models hallucinate on non-speech audio. Whisper was trained on
 subtitled video, so a few seconds of room tone reliably produces *"thank you for
@@ -400,7 +490,7 @@ silence, not filler: *"A seller who has gone quiet is thinking, not finished."*
 
 ---
 
-## 7. DocuSeal
+## 8. DocuSeal
 
 The supplied PDF is flat. The plan was to script Section C's 32 checkboxes and
 place the rest by hand.
@@ -445,13 +535,13 @@ not a gap.
 
 ---
 
-## 8. The interface
+## 9. The interface
 
 Two surfaces, two users, one system. A stressed non-technical person completing
 a legal document on a phone at 10pm, and a professional reading what they
 submitted on a desktop. Neither is helped by anything fashionable.
 
-### 8.1 Where the style came from, and where I overrode it
+### 9.1 Where the style came from, and where I overrode it
 
 I ran the product through a design-system generator. Querying it on "real
 estate" returned a **luxury marketing landing page** — Exaggerated Minimalism,
@@ -476,7 +566,7 @@ leaves the whole warm half of the spectrum free.
 figures so data columns do not jitter. `font-variant-numeric: tabular-nums`
 gives that from the one font already loaded.
 
-### 8.2 Tokens, and why contrast is a test rather than a claim
+### 9.2 Tokens, and why contrast is a test rather than a claim
 
 Components never write a raw hex. `globals.css` defines semantic tokens —
 `canvas`, `surface`, `ink`, `ink-muted`, `brand`, `attention`, `danger` — and
@@ -493,7 +583,7 @@ It caught three failures immediately: input borders at 2.13:1 and 1.93:1 against
 the 3:1 minimum for non-text UI, and hint text at 4.22:1 against 4.5:1. All
 three would have shipped.
 
-### 8.3 Four bugs found by looking rather than assuming
+### 9.3 Four bugs found by looking rather than assuming
 
 **Light mode never shipped.** Tailwind v4's `@theme` is a build-time directive;
 nesting it inside `@media` does not make it conditional. Tailwind hoisted both
@@ -516,7 +606,7 @@ agent"*, *"rather say it out loud"*, *"come back to this"* — the affordances a
 struggling seller most needs — rendered as 20px inline links against a 44px
 minimum. Their hit areas now extend past their visual bounds.
 
-### 8.4 What the interface does not do
+### 9.4 What the interface does not do
 
 No theme toggle: the OS preference is respected and nothing overrides it. No
 animation beyond 150–200ms state transitions, all of which stop under
@@ -526,7 +616,7 @@ seen this product before.
 
 ---
 
-## 9. What I skipped, and why
+## 10. What I skipped, and why
 
 The brief asks for deliberate choices about what to handle and what to skip. A
 stated omission reads as a decision; a silent gap reads as unfinished.
@@ -561,7 +651,7 @@ stated omission reads as a decision; a silent gap reads as unfinished.
 
 ---
 
-## 10. How to check any of this
+## 11. How to check any of this
 
 ```bash
 npm run check        # typecheck, registry, flow, form projection, contrast
