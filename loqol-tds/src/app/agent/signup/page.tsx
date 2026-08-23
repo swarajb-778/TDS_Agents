@@ -66,13 +66,12 @@ export default function AgentSignup() {
   if (sent && !delivered) {
     return (
       <AuthShell
-        title="You're all set"
+        title="Now sign in"
         lead={
           <>
             This build doesn&rsquo;t send email, so there&rsquo;s no link to wait
             for. Sign in with{" "}
-            <span className="font-medium text-ink">{sent}</span> and the password
-            you just chose.
+            <span className="font-medium text-ink">{sent}</span>.
           </>
         }
         footer={
@@ -86,10 +85,23 @@ export default function AgentSignup() {
         <Link href="/agent/login" className="mt-8 block">
           <Button full>Go to sign in</Button>
         </Link>
+        {/*
+          * Both cases, equal weight. Leading with "the password you just chose"
+          * is wrong for anyone who already had an account — signing up again is
+          * a no-op by design, so that password was never stored, and the sign-in
+          * that follows fails for a reason the screen just talked them out of
+          * suspecting. Which case you are in stays unsaid; only your own
+          * password reveals it.
+          */}
         <Card className="mt-4" tone="sunken">
-          <p className="text-sm text-ink-muted">
-            If that address already had an account, nothing changed — sign in with
-            that account&rsquo;s existing password instead.
+          <p className="text-sm text-ink">
+            <strong className="font-medium">New here?</strong> Use the password
+            you just chose.
+          </p>
+          <p className="mt-3 text-sm text-ink">
+            <strong className="font-medium">Signed up before?</strong> Nothing
+            changed — that account keeps its original password, and the one you
+            just typed was not saved.
           </p>
         </Card>
       </AuthShell>
